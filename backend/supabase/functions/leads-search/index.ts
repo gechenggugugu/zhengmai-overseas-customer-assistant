@@ -1,4 +1,4 @@
-import marketData from "../_shared/markets.json" with {type:"json"};
+import marketData from "./_shared/markets.json" with {type:"json"};
 
 const corsHeaders = (origin: string | null, allowed: string[]) => ({
   "Access-Control-Allow-Origin": origin && allowed.includes(origin) ? origin : "null",
