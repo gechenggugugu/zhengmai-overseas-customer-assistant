@@ -1,8 +1,7 @@
 // This file is public and downloaded by every visitor.
-// Set only a public API base URL here; never put API keys or passwords here.
+// Publishable keys are safe to expose when Row Level Security is enabled.
 window.ZHENGMAI_CONFIG = Object.freeze({
   searchEndpoint: "",
-  supabaseUrl: "",
-  // Supabase publishable/anon key only. RLS must remain enabled.
-  supabaseAnonKey: ""
+  supabaseUrl: "https://uylqymxykaefgyokheev.supabase.co",
+  supabaseAnonKey: "sb_publishable_qywELIojVC0UEotiglLLEg_sSwqmdNu"
 });
