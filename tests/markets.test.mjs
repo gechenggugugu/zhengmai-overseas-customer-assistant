@@ -26,7 +26,7 @@ test("country search uses one shared market config for searchable list and quick
 
 test("search resolves ISO codes and legacy labels, sends Tavily English country names, and maps Brave ISO codes", () => {
   assert.match(edge, /import marketData from "\.\.\/_shared\/markets\.json"/);
-  assert.match(edge, /const requestedMarket = marketFor\(query\.market\)/);
+  assert.match(edge, /const requestedMarket = contactSearch \? null : marketFor\(query\.market\)/);
   assert.match(edge, /\["uae", "阿联酋"\]/);
   assert.match(edge, /query\.market = requestedMarket\?\.code/);
   assert.match(edge, /country:selectedMarket\?\.tavily \? selectedMarket\.en\.toLocaleLowerCase\(\) : null/);
@@ -41,7 +41,8 @@ test("search resolves ISO codes and legacy labels, sends Tavily English country 
 
 test("country-specific query expands business terms while global search stays unscoped", () => {
   assert.match(edge, /distributor importer dealer wholesaler supplier/);
-  assert.match(edge, /if \(query\.market && !requestedMarket\) return json\(\{error:"invalid_market"\}/);
+  assert.match(edge, /if \(!contactSearch && query\.market && !requestedMarket\) return json\(\{error:"invalid_market"\}/);
   assert.match(edge, /replace\(\/\^www\\\.\//);
   assert.match(edge, /const market = requestedMarket && aliases\.some/);
 });
+
