@@ -12,6 +12,8 @@
 - 国家/地区在 `supabase/functions/_shared/markets.json` 统一配置，包含 249 个 ISO 3166-1 两位代码及中英文名称。前端传代码，函数可兼容旧的中文或英文名称输入。Tavily 收到其支持地区的英文国家名；其他地区仍通过关键词搜索，未选市场则不指定国家。Brave 只对已确认支持的既有 11 个市场发送 ISO 代码，其余只用关键词定位，避免提交不支持的地区码。
 - 每次用户搜索保持一个 Tavily basic 请求（通常 1 credit）；产品、客户类型、国家及经销/进口/批发同义词在同一查询中扩展。结果按规范化主机名去重，www 与非 www 的重复站点合并。
 
+`leads-search` 也支持 `{ "action":"contacts", "company":{"name":"...","website":"...","market":"MY"} }` 联系人搜索请求。它先走相同的 Supabase Auth 校验和 `consume_search_daily_limit()`，然后只发一条 Tavily basic / Brave 查询。采购职位优先，同时覆盖 Owner、Founder、Managing Director、CEO。仅当公开搜索结果文本同时包含目标公司、支持职位和可识别姓名时返回候选；社交链接必须来自 LinkedIn/Facebook 结果页，邮箱必须出现在结果摘要中，电话仅从带 phone/tel/call 标签的摘要提取。结果均为待核实候选，需人工打开证据来源确认。
+
 真实搜索目前不会使用示例客户。未配置后端、未登录或未配置搜索供应商时，真实搜索明确失败；演示样本继续标为模拟数据。
 
 ## 数据隔离和同步
@@ -35,3 +37,4 @@
 这些云服务设置需要所有者登录并操作。本次未创建 Supabase 项目、执行线上迁移、部署函数、启用收费功能或填入任何密钥。
 
 更多安全背景：[Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)、[API keys](https://supabase.com/docs/guides/getting-started/api-keys)、[Edge Function 部署](https://supabase.com/docs/guides/functions/deploy)。
+
