@@ -49,12 +49,20 @@ export async function searchLeads(query, signal) {
     const headers = {"Content-Type":"application/json"};
     if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
     const token = await cloudAdapter?.accessToken?.();
-    if (token) headers.Authorization = "Bearer " + token;
+    if (!token) throw new Error("请先登录并验证邮箱后再搜索。");
+    headers.Authorization = "Bearer " + token;
     const response = await fetch(config.searchEndpoint, {
       method: "POST", headers,
       body: JSON.stringify({...query, limit: config.maxResults}), signal
     });
-    if (!response.ok) throw new Error("真实搜索失败，服务状态码 " + response.status + "。");
+    if (!response.ok) {
+      const message = response.status === 401 ? "请先登录并验证邮箱后再搜索。" :
+        response.status === 429 ? "搜索配额已用完，请在下个配额周期后重试。" :
+        response.status === 503 ? "真实搜索服务尚未配置或暂不可用，请检查服务端设置。" :
+        response.status >= 500 ? "搜索服务暂时不可用。请稍后手动重试。" :
+        "搜索请求未通过校验（" + response.status + "）。";
+      throw new Error(message);
+    }
     const payload = await response.json();
     if (!Array.isArray(payload.leads)) throw new Error("真实搜索返回格式不符合接口约定。");
     return payload.leads.slice(0, config.maxResults).map(lead => ({
