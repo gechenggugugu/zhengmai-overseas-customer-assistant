@@ -1,4 +1,4 @@
-import {config, statuses, searchLeads, uniqueLeads, leadKey, repository, draftEmail, csvEncode, safeUrl} from "./services.mjs";
+import {config, statuses, searchLeads, searchCompanyContacts, uniqueLeads, leadKey, repository, draftEmail, csvEncode, safeUrl} from "./services.mjs";
 import {createCloudStore} from "./cloud-storage.mjs";
 const markets = await fetch("./backend/supabase/functions/_shared/markets.json", {cache:"force-cache"}).then(response => {
   if (!response.ok) throw new Error("market_config_unavailable");
@@ -9,6 +9,7 @@ const form = $("search-form");
 const dialog = $("details");
 const state = {page:"search", mode:"demo", results:[], records:{}, product:""};
 let activeSearch, toastTimer;
+let contactSearchController;
 const cloud = createCloudStore(config);
 repository.setCloudAdapter(cloud);
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -219,7 +220,11 @@ function showDetail(lead) {
     ["匹配理由",esc(lead.reason || "未获取")], ["来源链接",link(lead.source, lead)],
     [lead.sourceType === "demo" ? "模拟来源日期" : "来源日期",esc(lead.date || "未获取")]
   ];
-  $("detail-body").innerHTML = '<div class="detail-grid">' + fields.map(([key,value]) => '<div><b>' + key + '</b>' + value + '</div>').join("") +
+  const contactBlock = '<section class="contact-panel"><div class="section-heading"><div><h3>企业关键联系人</h3><p>采购负责人优先，同时查找公司老板与决策人。结果仅作线索，须核对来源。</p></div><button class="primary" id="find-contacts" ' + (lead.sourceType === "live" ? "" : "disabled") + '>按需挖掘</button></div>' +
+    (lead.sourceType !== "live" ? '<p class="contact-empty">演示公司为虚构样本，不能进行真实联系人搜索。</p>' : "") +
+    (record.contactSearchError ? '<p class="contact-empty">' + esc(record.contactSearchError) + '</p>' : "") +
+    (record.contacts?.length ? '<div class="contact-list">' + record.contacts.map((contact,index) => '<article class="contact-card"><div><strong>' + esc(contact.name || "姓名未识别") + '</strong><span class="badge">' + esc(contact.target || "联系人") + '</span></div><p>' + esc(contact.position || "职位待核实") + ' · ' + esc(contact.country || "国家待核实") + '</p><p>匹配度 ' + esc(contact.matchScore) + '/100 · ' + esc(contact.verificationStatus || "待核实") + '</p><p>' + (contact.socialUrl ? link(contact.socialUrl,lead) : "未找到公开 LinkedIn / Facebook 主页") + (contact.email ? ' · ' + esc(contact.email) : "") + (contact.phone ? ' · ' + esc(contact.phone) : "") + '</p><p>证据来源：' + link(contact.evidenceSource,lead) + '</p><small>' + esc(contact.evidence || "") + '</small><div class="contact-verify"><button data-contact-verify="' + index + '" data-status="' + (contact.verificationStatus === "已核实" ? "待核实" : "已核实") + '">' + (contact.verificationStatus === "已核实" ? "恢复待核实" : "人工核实后标记已核实") + '</button></div></article>').join("") + '</div>' : '<p class="contact-empty">' + (record.contactsSearchedAt ? (record.contactSearchStatus === "未找到" ? "未找到有证据的联系人。" : "联系人待核实。") + ' 搜索时间：' + esc(new Date(record.contactsSearchedAt).toLocaleString("zh-CN")) : "尚未挖掘。") + '</p>') + '</section>';
+  $("detail-body").innerHTML = '<div class="detail-grid">' + fields.map(([key,value]) => '<div><b>' + key + '</b>' + value + '</div>').join("") + '</div>' + contactBlock +
     '</div><label>跟进状态<select id="detail-status">' + options(record.status) + '</select></label>' +
     '<label style="margin-top:10px">跟进备注<textarea id="detail-note" placeholder="记录沟通内容或下一步行动">' + esc(record.note) + '</textarea></label>' +
     '<div class="actions"><button class="primary" id="save-follow">保存跟进</button><button id="draft">生成首次开发邮件</button></div>' +
@@ -234,6 +239,39 @@ function showDetail(lead) {
       if (draft !== null) { $("draft-text").value = draft; $("draft-area").hidden = false; }
     }
   };
+  $("find-contacts").onclick = async () => {
+    const button = $("find-contacts");
+    contactSearchController?.abort();
+    const request = contactSearchController = new AbortController();
+    button.disabled = true; button.textContent = "正在搜索…";
+    try {
+      const result = await searchCompanyContacts(lead, request.signal);
+      if (request.signal.aborted) return;
+      const previous = recordFor(lead).contacts || [];
+      const priorByIdentity = new Map(previous.map(contact => [contact.name + "|" + contact.position, contact]));
+      const contacts = result.contacts.length ? result.contacts.map(contact => {
+        const prior = priorByIdentity.get(contact.name + "|" + contact.position);
+        return prior?.verificationStatus === "已核实" ? {...contact, verificationStatus:"已核实", verifiedAt:prior.verifiedAt} : contact;
+      }) : previous;
+      updateRecord(lead, {contacts, contactsSearchedAt:result.searchedAt, contactSearchStatus:contacts.length ? "待核实" : "未找到", lastContactSearchFound:result.contacts.length, contactSearchError:""});
+      showDetail(lead);
+      notify(result.contacts.length ? `找到 ${result.contacts.length} 条联系人线索。` : previous.length ? "本次未找到新联系人，已保留此前记录。" : "搜索完成，未找到有来源证据的联系人。");
+    } catch (error) {
+      if (!request.signal.aborted) {
+        updateRecord(lead, {contactSearchError:error.message});
+        showDetail(lead);
+        notify(error.message);
+      }
+    }
+  };
+  $("detail-body").querySelectorAll("[data-contact-verify]").forEach(button => button.onclick = () => {
+    const contacts = [...(recordFor(lead).contacts || [])];
+    const index = Number(button.dataset.contactVerify);
+    if (!contacts[index]) return;
+    contacts[index] = {...contacts[index], verificationStatus:button.dataset.status, verifiedAt:button.dataset.status === "已核实" ? new Date().toISOString() : ""};
+    updateRecord(lead, {contacts});
+    showDetail(lead);
+  });
   $("draft").onclick = () => {
     $("draft-text").value = draftEmail(lead, state.page === "search" ? state.product : "");
     $("draft-area").hidden = false;
@@ -299,11 +337,14 @@ form.onsubmit = async event => {
   }
 };
 $("export").onclick = () => {
-  const headers = ["数据类型","公司名称","官网","国家/地区","客户类型","主营业务","联系方式","匹配理由","来源链接","来源日期","收藏","跟进状态","跟进备注"];
+  const headers = ["数据类型","公司名称","官网","国家/地区","客户类型","主营业务","联系方式","匹配理由","来源链接","来源日期","联系人姓名","联系人职位","联系人公开主页","联系人公开商务邮箱","联系人核实状态","联系人证据来源","收藏","跟进状态","跟进备注"];
   const leads = visibleLeads();
   const rows = leads.map(lead => {
     const record = recordFor(lead);
-    return [sourceName(lead),lead.name,lead.website,lead.market,lead.type,lead.business,lead.contact,lead.reason,lead.source,lead.date,record.saved ? "是" : "否",record.status,record.note];
+    const contacts = record.contacts || [];
+    return [sourceName(lead),lead.name,lead.website,lead.market,lead.type,lead.business,lead.contact,lead.reason,lead.source,lead.date,
+      ...["name","position","socialUrl","email","verificationStatus","evidenceSource"].map(key => contacts.map(contact => contact[key] || "").join("\n")),
+      record.saved ? "是" : "否",record.status,record.note];
   });
   const url = URL.createObjectURL(new Blob([csvEncode([headers,...rows])], {type:"text/csv;charset=utf-8"}));
   const anchor = document.createElement("a");
@@ -317,3 +358,4 @@ fillExample();
 $("search-button").disabled = false;
 $("startup-note").hidden = true;
 form.requestSubmit();
+
