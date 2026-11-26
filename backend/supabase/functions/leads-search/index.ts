@@ -97,20 +97,31 @@ Deno.serve(async request => {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json({error:"invalid_search_input"}, 400, cors);
     query = parsed as Record<string, unknown>;
   } catch { return json({error:"invalid_json"}, 400, cors); }
-  if (!query || typeof query.product !== "string" || !query.product.trim()) {
+  const contactSearch = query?.action === "contacts";
+  if (contactSearch && (!query.company || typeof query.company !== "object" || Array.isArray(query.company))) return json({error:"company_required"}, 400, cors);
+  if (!contactSearch && (!query || typeof query.product !== "string" || !query.product.trim())) {
     return json({error:"product_required"}, 400, cors);
   }
-  if (query.product.trim().length > 120 ||
+  if (contactSearch) {
+    const company = query.company as Record<string, unknown>;
+    if (typeof company.name !== "string" || !company.name.trim() || company.name.length > 240 ||
+        (company.website !== undefined && (typeof company.website !== "string" || company.website.length > 500)) ||
+        (company.market !== undefined && (typeof company.market !== "string" || company.market.length > 100))) return json({error:"invalid_company"}, 400, cors);
+    const requestedMarket = marketFor(company.market);
+    if (company.market && company.market !== "待核实" && !requestedMarket) return json({error:"invalid_market"}, 400, cors);
+    query.company = {name:company.name.trim(), website:safeUrl(company.website), market:requestedMarket?.code || ""};
+  }
+  if (!contactSearch && ((query.product as string).trim().length > 120 ||
       !["market", "type", "keyword"].every(key => query[key] === undefined ||
-        (typeof query[key] === "string" && query[key].length <= (key === "keyword" ? 120 : 100)))) {
+        (typeof query[key] === "string" && query[key].length <= (key === "keyword" ? 120 : 100))))) {
     return json({error:"invalid_search_input"}, 400, cors);
   }
-  if (query.days !== undefined && !["", "30", "90", "365", 30, 90, 365].includes(query.days as string | number)) {
+  if (!contactSearch && query.days !== undefined && !["", "30", "90", "365", 30, 90, 365].includes(query.days as string | number)) {
     return json({error:"invalid_days"}, 400, cors);
   }
-  const requestedMarket = marketFor(query.market);
-  if (query.market && !requestedMarket) return json({error:"invalid_market"}, 400, cors);
-  query.market = requestedMarket?.code || "";
+  const requestedMarket = contactSearch ? null : marketFor(query.market);
+  if (!contactSearch && query.market && !requestedMarket) return json({error:"invalid_market"}, 400, cors);
+  if (!contactSearch) query.market = requestedMarket?.code || "";
 
   const provider = Deno.env.get("SEARCH_PROVIDER") || "tavily";
   if (!["tavily", "brave"].includes(provider)) return json({error:"search_provider_not_configured"}, 503, cors);
@@ -127,6 +138,9 @@ Deno.serve(async request => {
 
   try {
     const payload = await searchWithProvider(provider, providerUrl, providerKey, query);
+    if (contactSearch) return Array.isArray(payload?.contacts)
+      ? json({contacts:payload.contacts.slice(0,30), searchedAt:new Date().toISOString()}, 200, cors)
+      : json({error:"invalid_provider_response"}, 502, cors);
     if (!Array.isArray(payload?.leads)) return json({error:"invalid_provider_response"}, 502, cors);
     let leads = payload.leads.slice(0, 100).map((lead: Record<string, unknown>) => ({
       name:String(lead.name ?? "").trim().slice(0, 240),
@@ -180,6 +194,11 @@ async function maybeAiEnrich(leads: Record<string, unknown>[], query: Record<str
 }
 
 function companyTerms(query: Record<string, unknown>, language: string) {
+  if (query.action === "contacts") {
+    const company = query.company as Record<string, unknown>;
+    const market = markets.find(item => item.code === String(company.market || ""));
+    return `"${String(company.name)}" (Purchasing Manager OR Procurement Manager OR Import Manager OR Sourcing Manager OR Owner OR Founder OR Managing Director OR CEO) ${market?.en || ""}`.trim();
+  }
   const product = String(query.product || "commercial bakery equipment");
   const type = String(query.type || "importer distributor");
   const market = markets.find(item => item.code === String(query.market || ""));
@@ -227,7 +246,38 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
     return items.map((item: Record<string, unknown>) => ({item, language}));
   }));
   const seen = new Set<string>();
-  const leads = searches.flat().map(({item, language}) => {
+  const flat = searches.flat();
+  if (query.action === "contacts") {
+    const company = query.company as Record<string, unknown>;
+    const companyName = String(company.name);
+    const rolePattern = /\b(Purchasing Manager|Procurement Manager|Import Manager|Sourcing Manager|Equipment Purchasing Manager|Owner|Founder|Managing Director|CEO|Chief Executive Officer)\b/i;
+    const contacts = flat.map(({item}) => {
+      const source = safeUrl(item.url);
+      const title = String(item.title || "").trim();
+      const evidence = (title + " " + String(item.content || item.description || "")).slice(0,1600);
+      const roleMatch = evidence.match(rolePattern);
+      if (!source || !roleMatch || !evidence.toLocaleLowerCase().includes(companyName.toLocaleLowerCase())) return null;
+      const head = title.split(/\s(?:-|\||–|—)\s/)[0].trim();
+      const personName = /[A-Za-z][A-Za-z.'’-]+(?:\s+[A-Za-z][A-Za-z.'’-]+){1,3}/.test(head) ? head : "";
+      if (!personName || personName.length > 100 || personName.toLocaleLowerCase() === companyName.toLocaleLowerCase()) return null;
+      const role = roleMatch[1];
+      const socialUrl = /(^|\.)linkedin\.com$|(^|\.)facebook\.com$/i.test(new URL(source).hostname) ? source : "";
+      const emails = evidence.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) || [];
+      const phoneMatch = evidence.match(/(?:phone|tel(?:ephone)?|call)\s*[:#-]?\s*(\+?\d[\d ().-]{7,}\d)/i);
+      const companyMarket = markets.find(market => market.code === String(company.market || ""));
+      const procurement = /purchasing|procurement|import manager|sourcing/i.test(role);
+      const companyMatch = evidence.toLocaleLowerCase().includes(companyName.toLocaleLowerCase());
+      const matchScore = Math.min(95, 45 + (procurement ? 25 : 10) + (companyMatch ? 25 : 0) + (socialUrl ? 5 : 0));
+      return {name:personName, position:role, target:procurement ? "采购负责人" : "公司老板/决策人",
+        country:companyMarket?.zh || "待核实", socialUrl, email:emails[0] || "", phone:phoneMatch?.[1]?.trim() || "",
+        evidenceSource:source, evidence:evidence.slice(0,1200), matchScore,
+        verificationStatus:"待核实", checkedAt:new Date().toISOString()};
+    }).filter(Boolean);
+    const uniqueContacts = [...new Map(contacts.map(contact => [(contact as Record<string, unknown>).name + "|" + (contact as Record<string, unknown>).position, contact])).values()];
+    uniqueContacts.sort((a,b) => Number((b as Record<string,unknown>).target === "采购负责人") - Number((a as Record<string,unknown>).target === "采购负责人"));
+    return {contacts:uniqueContacts};
+  }
+  const leads = flat.map(({item, language}) => {
     const url = safeUrl(item.url);
     const title = String(item.title || "").trim();
     const content = String(item.content || item.description || "").slice(0, 1600);
@@ -256,3 +306,4 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
   }).filter(Boolean);
   return {leads};
 }
+
