@@ -1,0 +1,5 @@
+*.zip
+backend/supabase/functions/.env
+backend/.env*
+!backend/.env.example
+node_modules/
