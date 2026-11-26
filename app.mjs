@@ -1,5 +1,9 @@
 import {config, statuses, searchLeads, uniqueLeads, leadKey, repository, draftEmail, csvEncode, safeUrl} from "./services.mjs";
 import {createCloudStore} from "./cloud-storage.mjs";
+const markets = await fetch("./backend/supabase/functions/_shared/markets.json", {cache:"force-cache"}).then(response => {
+  if (!response.ok) throw new Error("market_config_unavailable");
+  return response.json().then(items => items.sort((left, right) => left.zh.localeCompare(right.zh, "zh-CN")));
+});
 const $ = id => document.getElementById(id);
 const form = $("search-form");
 const dialog = $("details");
@@ -12,6 +16,19 @@ const sourceName = lead => lead.sourceType === "demo" ? "模拟样本" : "真实
 const badge = lead => '<span class="badge ' + esc(lead.sourceType) + '">' + sourceName(lead) + '</span>';
 const recordFor = lead => state.records[leadKey(lead)] || {status:statuses[0], saved:false, note:"", history:[]};
 const options = selected => statuses.map(status => '<option' + (status === selected ? ' selected' : '') + '>' + status + '</option>').join("");
+const marketLabels = {AE:"阿联酋"};
+const marketName = market => marketLabels[market.code] || market.zh;
+const marketOption = market => '<option value="' + esc(market.code) + '">' + esc(marketName(market)) + ' · ' + esc(market.en) + ' (' + esc(market.code) + ')</option>';
+function populateMarkets(search = "") {
+  const select = $("market-list");
+  const chosen = select.value;
+  const term = search.trim().toLocaleLowerCase();
+  const matches = markets.filter(market => !term || [market.code, market.zh, market.en, ...(market.aliases || [])].some(value => value.toLocaleLowerCase().includes(term)));
+  const selected = markets.find(market => market.code === chosen);
+  if (selected && !matches.includes(selected)) matches.unshift(selected);
+  select.innerHTML = '<option value="">全部市场（全球搜索）</option>' + matches.map(marketOption).join("");
+  select.value = chosen;
+}
 const link = (value, lead) => safeUrl(value)
   ? (lead.sourceType === "demo" ? esc(value) : '<a href="' + esc(safeUrl(value)) + '" target="_blank" rel="noopener noreferrer">' + esc(value) + '</a>')
   : "未获取";
@@ -24,6 +41,24 @@ function notify(message) {
 try { state.records = repository.list(); } catch { notify("读取本地记录失败。"); }
 $("status-filter").insertAdjacentHTML("beforeend", options(""));
 if (config.searchEndpoint) $("live-option").textContent = "真实搜索";
+populateMarkets();
+$("market-search").oninput = event => {
+  $("market-list").value = "";
+  populateMarkets(event.target.value);
+};
+$("market-list").onchange = event => {
+  const market = markets.find(item => item.code === event.target.value);
+  if (market) $("market-search").value = marketName(market);
+  else $("market-search").value = "";
+  populateMarkets($("market-search").value);
+};
+for (const button of document.querySelectorAll("[data-market]")) button.onclick = () => {
+  const market = markets.find(item => item.code === button.dataset.market);
+  if (!market) return;
+  $("market-search").value = marketName(market);
+  $("market-list").value = market.code;
+  populateMarkets($("market-search").value);
+};
 function visibleLeads() {
   const query = $("filter").value.trim().toLowerCase();
   const status = $("status-filter").value;
@@ -60,6 +95,9 @@ async function applyCloudSession(session) {
   state.records = repository.list();
   $("cloud-signout").hidden = !session;
   $("cloud-signup").hidden = Boolean(session);
+  const hasGuestRecords = Object.keys(repository.guestRecords()).length > 0;
+  $("guest-import-note").hidden = !session || !hasGuestRecords;
+  $("guest-import").hidden = !session || !hasGuestRecords;
   $("cloud-state").textContent = session ? "同步中…" : "未登录";
   let synced = !session;
   if (session) {
@@ -115,6 +153,14 @@ if (cloud.isConfigured()) {
   $("cloud-signout").onclick = async () => {
     try { await cloud.signOut(); } finally { await applyCloudSession(null); }
   };
+  $("guest-import").onclick = async () => {
+    try {
+      const count = await repository.importGuestRecords();
+      state.records = repository.list(); render();
+      notify(`已将 ${count} 条本机记录合并到当前账号。`);
+      $("guest-import-note").hidden = $("guest-import").hidden = true;
+    } catch { notify("导入失败，请检查账号登录和云端连接后重试。"); }
+  };
   cloud.restoreSession().then(applyCloudSession).catch(() => applyCloudSession(null));
   setInterval(() => {
     if (document.visibilityState === "visible") refreshCloudRecords();
@@ -165,8 +211,11 @@ function showDetail(lead) {
   const record = recordFor(lead);
   $("detail-title").textContent = lead.name;
   const fields = [
-    ["数据来源",badge(lead)], ["国家 / 地区",esc(lead.market)], ["客户类型",esc(lead.type)],
-    ["主营业务",esc(lead.business)], ["官网",link(lead.website, lead)], ["联系方式",esc(lead.contact || "未获取")],
+    ["数据来源",badge(lead)], ["公司名称核实",esc(lead.nameStatus || "需确认公司主体")],
+    ["国家 / 地区",esc(lead.market || "待核实") + " · " + esc(lead.marketStatus || "待核实")],
+    ["客户类型",esc(lead.type || "待核实") + " · " + esc(lead.typeStatus || "待核实")],
+    ["主营业务 / 搜索摘要",esc(lead.business)], ["搜索结果站点",link(lead.website, lead) + " · " + esc(lead.websiteStatus || "尚未核实为公司官网")], ["联系方式",esc(lead.contact || "未获取")],
+    ["联系方式核实",esc(lead.contactStatus || (lead.contact ? "请人工核实" : "未获取"))],
     ["匹配理由",esc(lead.reason || "未获取")], ["来源链接",link(lead.source, lead)],
     [lead.sourceType === "demo" ? "模拟来源日期" : "来源日期",esc(lead.date || "未获取")]
   ];

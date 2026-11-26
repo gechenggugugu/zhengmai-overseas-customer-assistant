@@ -1,0 +1,1749 @@
+[
+  {
+    "code": "AF",
+    "en": "Afghanistan",
+    "zh": "阿富汗",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AX",
+    "en": "Åland Islands",
+    "zh": "奥兰群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AL",
+    "en": "Albania",
+    "zh": "阿尔巴尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "DZ",
+    "en": "Algeria",
+    "zh": "阿尔及利亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AS",
+    "en": "American Samoa",
+    "zh": "美属萨摩亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AD",
+    "en": "Andorra",
+    "zh": "安道尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AO",
+    "en": "Angola",
+    "zh": "安哥拉",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AI",
+    "en": "Anguilla",
+    "zh": "安圭拉",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AQ",
+    "en": "Antarctica",
+    "zh": "南极洲",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AG",
+    "en": "Antigua & Barbuda",
+    "zh": "安提瓜和巴布达",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AR",
+    "en": "Argentina",
+    "zh": "阿根廷",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AM",
+    "en": "Armenia",
+    "zh": "亚美尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AW",
+    "en": "Aruba",
+    "zh": "阿鲁巴",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "AU",
+    "en": "Australia",
+    "zh": "澳大利亚",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "AT",
+    "en": "Austria",
+    "zh": "奥地利",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AZ",
+    "en": "Azerbaijan",
+    "zh": "阿塞拜疆",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BS",
+    "en": "Bahamas",
+    "zh": "巴哈马",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BH",
+    "en": "Bahrain",
+    "zh": "巴林",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BD",
+    "en": "Bangladesh",
+    "zh": "孟加拉国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BB",
+    "en": "Barbados",
+    "zh": "巴巴多斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BY",
+    "en": "Belarus",
+    "zh": "白俄罗斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BE",
+    "en": "Belgium",
+    "zh": "比利时",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BZ",
+    "en": "Belize",
+    "zh": "伯利兹",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BJ",
+    "en": "Benin",
+    "zh": "贝宁",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BM",
+    "en": "Bermuda",
+    "zh": "百慕大",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "BT",
+    "en": "Bhutan",
+    "zh": "不丹",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BO",
+    "en": "Bolivia",
+    "zh": "玻利维亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BA",
+    "en": "Bosnia & Herzegovina",
+    "zh": "波斯尼亚和黑塞哥维那",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "BW",
+    "en": "Botswana",
+    "zh": "博茨瓦纳",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BV",
+    "en": "Bouvet Island",
+    "zh": "布韦岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "BR",
+    "en": "Brazil",
+    "zh": "巴西",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IO",
+    "en": "British Indian Ocean Territory",
+    "zh": "英属印度洋领地",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "VG",
+    "en": "British Virgin Islands",
+    "zh": "英属维尔京群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "BN",
+    "en": "Brunei",
+    "zh": "文莱",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BG",
+    "en": "Bulgaria",
+    "zh": "保加利亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BF",
+    "en": "Burkina Faso",
+    "zh": "布基纳法索",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BI",
+    "en": "Burundi",
+    "zh": "布隆迪",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KH",
+    "en": "Cambodia",
+    "zh": "柬埔寨",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CM",
+    "en": "Cameroon",
+    "zh": "喀麦隆",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CA",
+    "en": "Canada",
+    "zh": "加拿大",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "CV",
+    "en": "Cape Verde",
+    "zh": "佛得角",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BQ",
+    "en": "Caribbean Netherlands",
+    "zh": "荷属加勒比区",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "KY",
+    "en": "Cayman Islands",
+    "zh": "开曼群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CF",
+    "en": "Central African Republic",
+    "zh": "中非共和国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TD",
+    "en": "Chad",
+    "zh": "乍得",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CL",
+    "en": "Chile",
+    "zh": "智利",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CN",
+    "en": "China",
+    "zh": "中国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CX",
+    "en": "Christmas Island",
+    "zh": "圣诞岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CC",
+    "en": "Cocos (Keeling) Islands",
+    "zh": "科科斯（基林）群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CO",
+    "en": "Colombia",
+    "zh": "哥伦比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KM",
+    "en": "Comoros",
+    "zh": "科摩罗",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CG",
+    "en": "Congo - Brazzaville",
+    "zh": "刚果（布）",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CD",
+    "en": "Congo - Kinshasa",
+    "zh": "刚果（金）",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CK",
+    "en": "Cook Islands",
+    "zh": "库克群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CR",
+    "en": "Costa Rica",
+    "zh": "哥斯达黎加",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CI",
+    "en": "Côte d’Ivoire",
+    "zh": "科特迪瓦",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "HR",
+    "en": "Croatia",
+    "zh": "克罗地亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CU",
+    "en": "Cuba",
+    "zh": "古巴",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CW",
+    "en": "Curaçao",
+    "zh": "库拉索",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "CY",
+    "en": "Cyprus",
+    "zh": "塞浦路斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CZ",
+    "en": "Czechia",
+    "zh": "捷克",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "DK",
+    "en": "Denmark",
+    "zh": "丹麦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "DJ",
+    "en": "Djibouti",
+    "zh": "吉布提",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "DM",
+    "en": "Dominica",
+    "zh": "多米尼克",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "DO",
+    "en": "Dominican Republic",
+    "zh": "多米尼加共和国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "EC",
+    "en": "Ecuador",
+    "zh": "厄瓜多尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "EG",
+    "en": "Egypt",
+    "zh": "埃及",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SV",
+    "en": "El Salvador",
+    "zh": "萨尔瓦多",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GQ",
+    "en": "Equatorial Guinea",
+    "zh": "赤道几内亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ER",
+    "en": "Eritrea",
+    "zh": "厄立特里亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "EE",
+    "en": "Estonia",
+    "zh": "爱沙尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SZ",
+    "en": "Eswatini",
+    "zh": "斯威士兰",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "ET",
+    "en": "Ethiopia",
+    "zh": "埃塞俄比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "FK",
+    "en": "Falkland Islands",
+    "zh": "福克兰群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "FO",
+    "en": "Faroe Islands",
+    "zh": "法罗群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "FJ",
+    "en": "Fiji",
+    "zh": "斐济",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "FI",
+    "en": "Finland",
+    "zh": "芬兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "FR",
+    "en": "France",
+    "zh": "法国",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "GF",
+    "en": "French Guiana",
+    "zh": "法属圭亚那",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "PF",
+    "en": "French Polynesia",
+    "zh": "法属波利尼西亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TF",
+    "en": "French Southern Territories",
+    "zh": "法属南部领地",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GA",
+    "en": "Gabon",
+    "zh": "加蓬",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GM",
+    "en": "Gambia",
+    "zh": "冈比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GE",
+    "en": "Georgia",
+    "zh": "格鲁吉亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "DE",
+    "en": "Germany",
+    "zh": "德国",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "GH",
+    "en": "Ghana",
+    "zh": "加纳",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GI",
+    "en": "Gibraltar",
+    "zh": "直布罗陀",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GR",
+    "en": "Greece",
+    "zh": "希腊",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GL",
+    "en": "Greenland",
+    "zh": "格陵兰",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GD",
+    "en": "Grenada",
+    "zh": "格林纳达",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GP",
+    "en": "Guadeloupe",
+    "zh": "瓜德罗普",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GU",
+    "en": "Guam",
+    "zh": "关岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GT",
+    "en": "Guatemala",
+    "zh": "危地马拉",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GG",
+    "en": "Guernsey",
+    "zh": "根西岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GN",
+    "en": "Guinea",
+    "zh": "几内亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GW",
+    "en": "Guinea-Bissau",
+    "zh": "几内亚比绍",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "GY",
+    "en": "Guyana",
+    "zh": "圭亚那",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "HT",
+    "en": "Haiti",
+    "zh": "海地",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "HM",
+    "en": "Heard & McDonald Islands",
+    "zh": "赫德岛和麦克唐纳群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "HN",
+    "en": "Honduras",
+    "zh": "洪都拉斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "HK",
+    "en": "Hong Kong SAR China",
+    "zh": "中国香港特别行政区",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "HU",
+    "en": "Hungary",
+    "zh": "匈牙利",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IS",
+    "en": "Iceland",
+    "zh": "冰岛",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IN",
+    "en": "India",
+    "zh": "印度",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ID",
+    "en": "Indonesia",
+    "zh": "印度尼西亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IR",
+    "en": "Iran",
+    "zh": "伊朗",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IQ",
+    "en": "Iraq",
+    "zh": "伊拉克",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IE",
+    "en": "Ireland",
+    "zh": "爱尔兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IM",
+    "en": "Isle of Man",
+    "zh": "马恩岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "IL",
+    "en": "Israel",
+    "zh": "以色列",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "IT",
+    "en": "Italy",
+    "zh": "意大利",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "JM",
+    "en": "Jamaica",
+    "zh": "牙买加",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "JP",
+    "en": "Japan",
+    "zh": "日本",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "JE",
+    "en": "Jersey",
+    "zh": "泽西岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "JO",
+    "en": "Jordan",
+    "zh": "约旦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KZ",
+    "en": "Kazakhstan",
+    "zh": "哈萨克斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KE",
+    "en": "Kenya",
+    "zh": "肯尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KI",
+    "en": "Kiribati",
+    "zh": "基里巴斯",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "KW",
+    "en": "Kuwait",
+    "zh": "科威特",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "KG",
+    "en": "Kyrgyzstan",
+    "zh": "吉尔吉斯斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LA",
+    "en": "Laos",
+    "zh": "老挝",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "LV",
+    "en": "Latvia",
+    "zh": "拉脱维亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LB",
+    "en": "Lebanon",
+    "zh": "黎巴嫩",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LS",
+    "en": "Lesotho",
+    "zh": "莱索托",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LR",
+    "en": "Liberia",
+    "zh": "利比里亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LY",
+    "en": "Libya",
+    "zh": "利比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LI",
+    "en": "Liechtenstein",
+    "zh": "列支敦士登",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LT",
+    "en": "Lithuania",
+    "zh": "立陶宛",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LU",
+    "en": "Luxembourg",
+    "zh": "卢森堡",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MO",
+    "en": "Macao SAR China",
+    "zh": "中国澳门特别行政区",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MG",
+    "en": "Madagascar",
+    "zh": "马达加斯加",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MW",
+    "en": "Malawi",
+    "zh": "马拉维",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MY",
+    "en": "Malaysia",
+    "zh": "马来西亚",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "MV",
+    "en": "Maldives",
+    "zh": "马尔代夫",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ML",
+    "en": "Mali",
+    "zh": "马里",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MT",
+    "en": "Malta",
+    "zh": "马耳他",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MH",
+    "en": "Marshall Islands",
+    "zh": "马绍尔群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MQ",
+    "en": "Martinique",
+    "zh": "马提尼克",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MR",
+    "en": "Mauritania",
+    "zh": "毛里塔尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MU",
+    "en": "Mauritius",
+    "zh": "毛里求斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "YT",
+    "en": "Mayotte",
+    "zh": "马约特",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MX",
+    "en": "Mexico",
+    "zh": "墨西哥",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "FM",
+    "en": "Micronesia",
+    "zh": "密克罗尼西亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MD",
+    "en": "Moldova",
+    "zh": "摩尔多瓦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MC",
+    "en": "Monaco",
+    "zh": "摩纳哥",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MN",
+    "en": "Mongolia",
+    "zh": "蒙古",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ME",
+    "en": "Montenegro",
+    "zh": "黑山",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MS",
+    "en": "Montserrat",
+    "zh": "蒙特塞拉特",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MA",
+    "en": "Morocco",
+    "zh": "摩洛哥",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MZ",
+    "en": "Mozambique",
+    "zh": "莫桑比克",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MM",
+    "en": "Myanmar (Burma)",
+    "zh": "缅甸",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "NA",
+    "en": "Namibia",
+    "zh": "纳米比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NR",
+    "en": "Nauru",
+    "zh": "瑙鲁",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "NP",
+    "en": "Nepal",
+    "zh": "尼泊尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NL",
+    "en": "Netherlands",
+    "zh": "荷兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NC",
+    "en": "New Caledonia",
+    "zh": "新喀里多尼亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "NZ",
+    "en": "New Zealand",
+    "zh": "新西兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NI",
+    "en": "Nicaragua",
+    "zh": "尼加拉瓜",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NE",
+    "en": "Niger",
+    "zh": "尼日尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NG",
+    "en": "Nigeria",
+    "zh": "尼日利亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "NU",
+    "en": "Niue",
+    "zh": "纽埃",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "NF",
+    "en": "Norfolk Island",
+    "zh": "诺福克岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "KP",
+    "en": "North Korea",
+    "zh": "朝鲜",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MK",
+    "en": "North Macedonia",
+    "zh": "北马其顿",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "MP",
+    "en": "Northern Mariana Islands",
+    "zh": "北马里亚纳群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "NO",
+    "en": "Norway",
+    "zh": "挪威",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "OM",
+    "en": "Oman",
+    "zh": "阿曼",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PK",
+    "en": "Pakistan",
+    "zh": "巴基斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PW",
+    "en": "Palau",
+    "zh": "帕劳",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "PS",
+    "en": "Palestinian Territories",
+    "zh": "巴勒斯坦领土",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "PA",
+    "en": "Panama",
+    "zh": "巴拿马",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PG",
+    "en": "Papua New Guinea",
+    "zh": "巴布亚新几内亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PY",
+    "en": "Paraguay",
+    "zh": "巴拉圭",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PE",
+    "en": "Peru",
+    "zh": "秘鲁",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PH",
+    "en": "Philippines",
+    "zh": "菲律宾",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PN",
+    "en": "Pitcairn Islands",
+    "zh": "皮特凯恩群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "PL",
+    "en": "Poland",
+    "zh": "波兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PT",
+    "en": "Portugal",
+    "zh": "葡萄牙",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "PR",
+    "en": "Puerto Rico",
+    "zh": "波多黎各",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "QA",
+    "en": "Qatar",
+    "zh": "卡塔尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "RE",
+    "en": "Réunion",
+    "zh": "留尼汪",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "RO",
+    "en": "Romania",
+    "zh": "罗马尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "RU",
+    "en": "Russia",
+    "zh": "俄罗斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "RW",
+    "en": "Rwanda",
+    "zh": "卢旺达",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "WS",
+    "en": "Samoa",
+    "zh": "萨摩亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SM",
+    "en": "San Marino",
+    "zh": "圣马力诺",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "ST",
+    "en": "São Tomé & Príncipe",
+    "zh": "圣多美和普林西比",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SA",
+    "en": "Saudi Arabia",
+    "zh": "沙特阿拉伯",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "SN",
+    "en": "Senegal",
+    "zh": "塞内加尔",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "RS",
+    "en": "Serbia",
+    "zh": "塞尔维亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SC",
+    "en": "Seychelles",
+    "zh": "塞舌尔",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SL",
+    "en": "Sierra Leone",
+    "zh": "塞拉利昂",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SG",
+    "en": "Singapore",
+    "zh": "新加坡",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SX",
+    "en": "Sint Maarten",
+    "zh": "荷属圣马丁",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SK",
+    "en": "Slovakia",
+    "zh": "斯洛伐克",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SI",
+    "en": "Slovenia",
+    "zh": "斯洛文尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SB",
+    "en": "Solomon Islands",
+    "zh": "所罗门群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SO",
+    "en": "Somalia",
+    "zh": "索马里",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ZA",
+    "en": "South Africa",
+    "zh": "南非",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "GS",
+    "en": "South Georgia & South Sandwich Islands",
+    "zh": "南乔治亚和南桑威奇群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "KR",
+    "en": "South Korea",
+    "zh": "韩国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SS",
+    "en": "South Sudan",
+    "zh": "南苏丹",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ES",
+    "en": "Spain",
+    "zh": "西班牙",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "LK",
+    "en": "Sri Lanka",
+    "zh": "斯里兰卡",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "BL",
+    "en": "St. Barthélemy",
+    "zh": "圣巴泰勒米",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SH",
+    "en": "St. Helena",
+    "zh": "圣赫勒拿",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "KN",
+    "en": "St. Kitts & Nevis",
+    "zh": "圣基茨和尼维斯",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "LC",
+    "en": "St. Lucia",
+    "zh": "圣卢西亚",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "MF",
+    "en": "St. Martin",
+    "zh": "法属圣马丁",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "PM",
+    "en": "St. Pierre & Miquelon",
+    "zh": "圣皮埃尔和密克隆群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "VC",
+    "en": "St. Vincent & Grenadines",
+    "zh": "圣文森特和格林纳丁斯",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SD",
+    "en": "Sudan",
+    "zh": "苏丹",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SR",
+    "en": "Suriname",
+    "zh": "苏里南",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SJ",
+    "en": "Svalbard & Jan Mayen",
+    "zh": "斯瓦尔巴和扬马延",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "SE",
+    "en": "Sweden",
+    "zh": "瑞典",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "CH",
+    "en": "Switzerland",
+    "zh": "瑞士",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "SY",
+    "en": "Syria",
+    "zh": "叙利亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TW",
+    "en": "Taiwan",
+    "zh": "台湾",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TJ",
+    "en": "Tajikistan",
+    "zh": "塔吉克斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TZ",
+    "en": "Tanzania",
+    "zh": "坦桑尼亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TH",
+    "en": "Thailand",
+    "zh": "泰国",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TL",
+    "en": "Timor-Leste",
+    "zh": "东帝汶",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TG",
+    "en": "Togo",
+    "zh": "多哥",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TK",
+    "en": "Tokelau",
+    "zh": "托克劳",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TO",
+    "en": "Tonga",
+    "zh": "汤加",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TT",
+    "en": "Trinidad & Tobago",
+    "zh": "特立尼达和多巴哥",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TN",
+    "en": "Tunisia",
+    "zh": "突尼斯",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TR",
+    "en": "Turkey",
+    "zh": "土耳其",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TM",
+    "en": "Turkmenistan",
+    "zh": "土库曼斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "TC",
+    "en": "Turks & Caicos Islands",
+    "zh": "特克斯和凯科斯群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "TV",
+    "en": "Tuvalu",
+    "zh": "图瓦卢",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "UM",
+    "en": "U.S. Outlying Islands",
+    "zh": "美国本土外小岛屿",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "VI",
+    "en": "U.S. Virgin Islands",
+    "zh": "美属维尔京群岛",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "UG",
+    "en": "Uganda",
+    "zh": "乌干达",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "UA",
+    "en": "Ukraine",
+    "zh": "乌克兰",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "AE",
+    "en": "United Arab Emirates",
+    "zh": "阿拉伯联合酋长国",
+    "aliases": [
+      "阿联酋",
+      "UAE"
+    ],
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "GB",
+    "en": "United Kingdom",
+    "zh": "英国",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "US",
+    "en": "United States",
+    "zh": "美国",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "UY",
+    "en": "Uruguay",
+    "zh": "乌拉圭",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "UZ",
+    "en": "Uzbekistan",
+    "zh": "乌兹别克斯坦",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "VU",
+    "en": "Vanuatu",
+    "zh": "瓦努阿图",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "VA",
+    "en": "Vatican City",
+    "zh": "梵蒂冈",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "VE",
+    "en": "Venezuela",
+    "zh": "委内瑞拉",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "VN",
+    "en": "Vietnam",
+    "zh": "越南",
+    "tavily": true,
+    "brave": true
+  },
+  {
+    "code": "WF",
+    "en": "Wallis & Futuna",
+    "zh": "瓦利斯和富图纳",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "EH",
+    "en": "Western Sahara",
+    "zh": "西撒哈拉",
+    "tavily": false,
+    "brave": false
+  },
+  {
+    "code": "YE",
+    "en": "Yemen",
+    "zh": "也门",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ZM",
+    "en": "Zambia",
+    "zh": "赞比亚",
+    "tavily": true,
+    "brave": false
+  },
+  {
+    "code": "ZW",
+    "en": "Zimbabwe",
+    "zh": "津巴布韦",
+    "tavily": true,
+    "brave": false
+  }
+]

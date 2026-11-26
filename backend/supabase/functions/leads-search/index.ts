@@ -1,3 +1,5 @@
+import marketData from "../_shared/markets.json" with {type:"json"};
+
 const corsHeaders = (origin: string | null, allowed: string[]) => ({
   "Access-Control-Allow-Origin": origin && allowed.includes(origin) ? origin : "null",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type",
@@ -45,6 +47,14 @@ const safeUrl = (value: unknown) => {
     const url = new URL(String(value || ""));
     return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : "";
   } catch { return ""; }
+};
+type Market = {code:string; zh:string; en:string; aliases?:string[]; tavily:boolean; brave:boolean};
+const markets = marketData as Market[];
+const marketFor = (value: unknown) => {
+  const name = String(value || "").trim().toLocaleLowerCase();
+  if (!name) return null;
+  return markets.find(market => [market.code, market.zh, market.en, ...(market.aliases || [])].some(item => item.toLocaleLowerCase() === name)) ||
+    (["uae", "阿联酋"].includes(name) ? markets.find(market => market.code === "AE") : null);
 };
 
 Deno.serve(async request => {
@@ -98,6 +108,9 @@ Deno.serve(async request => {
   if (query.days !== undefined && !["", "30", "90", "365", 30, 90, 365].includes(query.days as string | number)) {
     return json({error:"invalid_days"}, 400, cors);
   }
+  const requestedMarket = marketFor(query.market);
+  if (query.market && !requestedMarket) return json({error:"invalid_market"}, 400, cors);
+  query.market = requestedMarket?.code || "";
 
   const provider = Deno.env.get("SEARCH_PROVIDER") || "tavily";
   if (!["tavily", "brave"].includes(provider)) return json({error:"search_provider_not_configured"}, 503, cors);
@@ -169,12 +182,15 @@ async function maybeAiEnrich(leads: Record<string, unknown>[], query: Record<str
 function companyTerms(query: Record<string, unknown>, language: string) {
   const product = String(query.product || "commercial bakery equipment");
   const type = String(query.type || "importer distributor");
-  const market = String(query.market || "");
+  const market = markets.find(item => item.code === String(query.market || ""));
   const keyword = String(query.keyword || "");
   const terms: Record<string, string> = {
-    en:`${product} ${type} ${market} bakery equipment ${keyword}`, zh:`${market} ${product} 烘焙设备 ${type} 进口商 经销商 ${keyword}`,
-    es:`${market} equipos de panadería ${type} ${product} ${keyword}`, fr:`${market} équipement boulangerie ${type} ${product} ${keyword}`,
-    de:`${market} Bäckereitechnik ${type} ${product} ${keyword}`, ar:`${market} معدات مخابز ${type} ${product} ${keyword}`
+    en:`${product} ${market?.en || ""} bakery equipment distributor importer dealer wholesaler supplier ${type} ${keyword}`.trim(),
+    zh:`${market?.zh || ""} ${product} 烘焙设备 设备经销商 进口商 批发商 ${keyword}`.trim(),
+    es:`${market?.en || ""} equipos de panadería distribuidor importador ${product} ${keyword}`.trim(),
+    fr:`${market?.en || ""} équipement boulangerie distributeur importateur ${product} ${keyword}`.trim(),
+    de:`${market?.en || ""} Bäckereitechnik Händler Importeur ${product} ${keyword}`.trim(),
+    ar:`${market?.en || ""} معدات مخابز موزع مستورد ${product} ${keyword}`.trim()
   };
   return terms[language] || `${product} ${type}`;
 }
@@ -185,24 +201,23 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
   const languages = ["en"];
   const searches = await Promise.all(languages.map(async language => {
     const text = companyTerms(query, language);
+    const selectedMarket = markets.find(item => item.code === String(query.market || ""));
     let response: Response;
     if (provider === "tavily") {
-      const countryNames: Record<string,string> = {"美国":"united states","马来西亚":"malaysia","阿联酋":"united arab emirates","澳大利亚":"australia","越南":"vietnam","沙特阿拉伯":"saudi arabia","英国":"united kingdom","德国":"germany","法国":"france","日本":"japan","加拿大":"canada"};
       const days = Number(query.days || 0);
       const endDate = new Date().toISOString().slice(0, 10);
       const startDate = days ? new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10) : undefined;
       response = await fetch(endpoint || "https://api.tavily.com/search", {
         method:"POST", headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"},
         body:JSON.stringify({query:text, search_depth:"basic", max_results:10, topic:"general", language,
-          country:countryNames[String(query.market || "")] || null, include_answer:false, include_usage:true,
+          country:selectedMarket?.tavily ? selectedMarket.en.toLocaleLowerCase() : null, include_answer:false, include_usage:true,
           ...(startDate ? {start_date:startDate, end_date:endDate, include_published_date:true} : {})}),
         signal:AbortSignal.timeout(20_000)
       });
     } else if (provider === "brave") {
       const url = new URL(endpoint || "https://api.search.brave.com/res/v1/web/search");
       url.searchParams.set("q", text); url.searchParams.set("count", "10");
-      const countryCodes: Record<string, string> = {"美国":"US","马来西亚":"MY","阿联酋":"AE","澳大利亚":"AU","越南":"VN","沙特阿拉伯":"SA","英国":"GB","德国":"DE","法国":"FR","日本":"JP","加拿大":"CA"};
-      if (query.market && countryCodes[String(query.market)]) url.searchParams.set("country", countryCodes[String(query.market)]);
+      if (selectedMarket?.brave) url.searchParams.set("country", selectedMarket.code);
       url.searchParams.set("search_lang", language);
       response = await fetch(url, {headers:{"X-Subscription-Token":key}, signal:AbortSignal.timeout(20_000)});
     } else throw new Error("unsupported_provider");
@@ -217,14 +232,20 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
     const title = String(item.title || "").trim();
     const content = String(item.content || item.description || "").slice(0, 1600);
     if (!url || !title) return null;
-    const website = new URL(url).origin;
-    if (seen.has(website)) return null;
-    seen.add(website);
+    const websiteUrl = new URL(url);
+    const hostname = websiteUrl.hostname.toLocaleLowerCase().replace(/^www\./, "");
+    if (seen.has(hostname)) return null;
+    seen.add(hostname);
+    const website = websiteUrl.origin;
     const emails = content.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) || [];
     const evidence = title + " " + content;
-    const marketAliases: Record<string,string[]> = {"马来西亚":["malaysia"],"阿联酋":["united arab emirates","uae"],"澳大利亚":["australia"],"越南":["vietnam"],"沙特阿拉伯":["saudi arabia"],"美国":["united states","usa"],"英国":["united kingdom","uk"],"德国":["germany"],"法国":["france"],"日本":["japan"],"加拿大":["canada"]};
-    const requestedMarket = String(query.market || "");
-    const market = requestedMarket && [requestedMarket,...(marketAliases[requestedMarket] || [])].some(value => evidence.toLowerCase().includes(value.toLowerCase())) ? requestedMarket : "待核实";
+    const requestedMarket = selectedMarket;
+    const aliases = requestedMarket ? [requestedMarket.zh, requestedMarket.en, ...(requestedMarket.aliases || []),
+      ...(requestedMarket.code === "AE" ? ["uae", "阿联酋", "emirates"] : []),
+      ...(requestedMarket.code === "US" ? ["usa", "u.s."] : []),
+      ...(requestedMarket.code === "GB" ? ["uk", "britain"] : [])] : [];
+    const market = requestedMarket && aliases.some(value => evidence.toLocaleLowerCase().includes(value.toLocaleLowerCase()))
+      ? (requestedMarket.code === "AE" ? "阿联酋" : requestedMarket.zh) : "待核实";
     const kind = /(importer|进口商)/i.test(evidence) ? "设备进口商" : /(distributor|dealer|wholesale|经销商|批发)/i.test(evidence) ? "设备经销商" : /(integrator|engineering|工程集成)/i.test(evidence) ? "工程集成商" : "待核实";
     const score = Math.min(95, 35 + (/(bakery|bake|oven|烘焙|bakker|boulanger|panader)/i.test(evidence) ? 30 : 0) + (/(distributor|importer|dealer|wholesale|经销|进口|grosshandel)/i.test(evidence) ? 25 : 0));
     return {name:title, nameStatus:"搜索结果标题，需确认公司主体", market, marketStatus:market === "待核实" ? "摘要未能确认国家 / 地区" : "摘要提及目标市场，仍需人工核实", type:kind, typeStatus:kind === "待核实" ? "摘要未能确认客户类型" : "由摘要关键词初步识别，仍需人工核实", business:content,

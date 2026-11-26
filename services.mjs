@@ -6,7 +6,8 @@ export const config = Object.freeze({
     ? publicSettings.searchEndpoint
     : (supabaseUrl ? supabaseUrl + "/functions/v1/leads-search" : ""),
   supabaseUrl,
-  supabaseAnonKey: typeof publicSettings.supabaseAnonKey === "string" ? publicSettings.supabaseAnonKey : "",
+  supabaseAnonKey: typeof publicSettings.supabasePublishableKey === "string" ? publicSettings.supabasePublishableKey :
+    (typeof publicSettings.supabaseAnonKey === "string" ? publicSettings.supabaseAnonKey : ""),
   storageKey: "zhengmai.crm.v1",
   maxResults: 100
 });
@@ -19,7 +20,7 @@ const samples = [
   ["Lotus Oven Trading", "lotus", "越南", "设备进口商", "商用烤箱、醒发箱", "进口与分销烘焙设备，适合提供组合选型资料。", "commercial ovens and proofers", 21],
   ["Najd Bakery Projects", "najd", "沙特阿拉伯", "工程集成商", "和面机、烘焙生产线", "烘焙工厂项目采购场景，适合评估产线设备配套。", "dough mixers and bakery production lines", 105]
 ];
-const aliases = {"malaysia":"马来西亚","uae":"阿联酋","united arab emirates":"阿联酋","australia":"澳大利亚","vietnam":"越南","saudi arabia":"沙特阿拉伯","commercial oven":"商用烤箱","dough mixer":"和面机","proofer":"醒发箱","bakery production line":"烘焙生产线","bakery equipment":"商用烘焙设备"};
+const aliases = {"my":"马来西亚","malaysia":"马来西亚","ae":"阿联酋","uae":"阿联酋","united arab emirates":"阿联酋","au":"澳大利亚","australia":"澳大利亚","vn":"越南","vietnam":"越南","sa":"沙特阿拉伯","saudi arabia":"沙特阿拉伯","commercial oven":"商用烤箱","dough mixer":"和面机","proofer":"醒发箱","bakery production line":"烘焙生产线","bakery equipment":"商用烘焙设备"};
 export function safeUrl(value) {
   try {
     const url = new URL(value);
@@ -49,8 +50,7 @@ export async function searchLeads(query, signal) {
     const headers = {"Content-Type":"application/json"};
     if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
     const token = await cloudAdapter?.accessToken?.();
-    if (!token) throw new Error("请先登录并验证邮箱后再搜索。");
-    headers.Authorization = "Bearer " + token;
+    if (token) headers.Authorization = "Bearer " + token;
     const response = await fetch(config.searchEndpoint, {
       method: "POST", headers,
       body: JSON.stringify({...query, limit: config.maxResults}), signal
@@ -59,7 +59,7 @@ export async function searchLeads(query, signal) {
       const message = response.status === 401 ? "请先登录并验证邮箱后再搜索。" :
         response.status === 429 ? "搜索配额已用完，请在下个配额周期后重试。" :
         response.status === 503 ? "真实搜索服务尚未配置或暂不可用，请检查服务端设置。" :
-        response.status >= 500 ? "搜索服务暂时不可用。请稍后手动重试。" :
+        response.status >= 500 ? "搜索服务暂时不可用。请稍后手动重试；系统不会自动重复请求或产生额外用量。" :
         "搜索请求未通过校验（" + response.status + "）。";
       throw new Error(message);
     }
@@ -67,8 +67,13 @@ export async function searchLeads(query, signal) {
     if (!Array.isArray(payload.leads)) throw new Error("真实搜索返回格式不符合接口约定。");
     return payload.leads.slice(0, config.maxResults).map(lead => ({
       name: String(lead.name ?? "").trim(), market: String(lead.market ?? ""),
-      type: String(lead.type ?? ""), business: String(lead.business ?? ""),
+      marketStatus: String(lead.marketStatus ?? "待核实"), type: String(lead.type ?? ""),
+      typeStatus: String(lead.typeStatus ?? "待核实"), nameStatus: String(lead.nameStatus ?? "需确认公司主体"),
+      websiteStatus: String(lead.websiteStatus ?? "搜索结果站点，尚未核实为公司官网"), business: String(lead.business ?? ""),
       website: safeUrl(lead.website), contact: String(lead.contact ?? ""),
+      contactStatus: String(lead.contactStatus ?? (lead.contact ? "来源摘要发现 · 请人工核实" : "未获取")),
+      matchScore: Number.isFinite(Number(lead.matchScore)) ? Number(lead.matchScore) : null,
+      emailDraft: String(lead.emailDraft ?? "").slice(0, 5000),
       reason: String(lead.reason ?? ""), source: safeUrl(lead.source),
       date: String(lead.date ?? ""), emailFocus: "", sourceType: "live"
     })).filter(lead => lead.name && lead.source);
@@ -101,6 +106,19 @@ export const repository = {
   setCloudAdapter(adapter) { cloudAdapter = adapter; },
   useUser(userId) { storageNamespace = userId ? ".user." + userId : ""; },
   isCloudUser() { return Boolean(storageNamespace); },
+  guestRecords() { try { return JSON.parse(localStorage.getItem(config.storageKey) || "{}"); } catch { return {}; } },
+  async importGuestRecords() {
+    if (!storageNamespace) throw new Error("请先登录云端账号。");
+    const guest = this.guestRecords();
+    const current = this.list();
+    for (const [key, record] of Object.entries(guest)) {
+      if (!current[key]) current[key] = record;
+      else if (Date.parse(record.updatedAt || 0) > Date.parse(current[key].updatedAt || 0)) current[key] = record;
+    }
+    localStorage.setItem(config.storageKey + storageNamespace, JSON.stringify(current));
+    await this.syncCloud();
+    return Object.keys(guest).length;
+  },
   async syncRecord(lead) {
     if (!cloudAdapter || !storageNamespace) return false;
     const key = leadKey(lead);
@@ -150,6 +168,7 @@ export const repository = {
   }
 };
 export function draftEmail(lead, product) {
+  if (lead.emailDraft) return lead.emailDraft;
   const focus = lead.emailFocus || "commercial bakery equipment";
   return (lead.sourceType === "demo" ? "【演示草稿 · 虚构客户】\n" : "") +
     "Subject: Zhengmai bakery equipment for " + lead.name + "\n\n" +

@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; object-src 'none'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="description" content="正麦商用烘焙设备海外客户开发演示工作台">
 <title>正麦海外客户开发助手</title>
 <link rel="stylesheet" href="./style.css">
 <script src="./public-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="./app.mjs"></script>
 </head>
 <body>
@@ -31,13 +34,25 @@
         <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" required></label>
         <div class="form-actions"><button class="primary" type="submit">登录并同步</button><button id="cloud-signup" type="button">创建云端账号</button><button id="cloud-signout" type="button" hidden>退出登录</button></div>
       </form>
+      <p id="guest-import-note" hidden>发现本机访客记录。登录后可选择导入到当前账号，合并结果将在其他设备同步。</p>
+      <button id="guest-import" type="button" hidden>将本机记录导入当前账号</button>
     </section>
     <div id="startup-note" class="notice" role="status">交互脚本尚未启动。如果你正在预览附件，请先下载 HTML，再用 Edge 或 Chrome 打开。</div>
     <section class="panel" id="search-panel">
       <div class="section-heading"><div><h2>线索搜索</h2><p>设置目标市场与客户画像</p></div><button id="example" class="plain">填入示例</button></div>
       <form id="search-form">
         <label>产品<input name="product" list="products" placeholder="例如 商用烤箱" required><datalist id="products"><option>商用烘焙设备</option><option>商用烤箱</option><option>和面机</option><option>醒发箱</option><option>烘焙生产线</option></datalist></label>
-        <label>国家 / 地区<input name="market" list="markets" placeholder="全部市场"><datalist id="markets"><option>马来西亚</option><option>阿联酋</option><option>澳大利亚</option><option>越南</option><option>沙特阿拉伯</option></datalist></label>
+        <div class="market-picker">
+          <label for="market-search">国家 / 地区</label>
+          <input id="market-search" type="search" placeholder="搜索国家名称，例如 Japan / 日本" autocomplete="off" aria-controls="market-list">
+          <select id="market-list" name="market" aria-label="选择国家或地区"><option value="">全部市场（全球搜索）</option></select>
+          <small>单选 · 不选择国家时搜索全球</small>
+          <div class="market-shortcuts" aria-label="常用市场">
+            <button type="button" data-market="MY">马来西亚</button><button type="button" data-market="AE">阿联酋</button>
+            <button type="button" data-market="AU">澳大利亚</button><button type="button" data-market="VN">越南</button>
+            <button type="button" data-market="SA">沙特阿拉伯</button>
+          </div>
+        </div>
         <label>客户类型<select name="type"><option value="">全部类型</option><option>设备经销商</option><option>设备进口商</option><option>工程集成商</option></select></label>
         <label>关键词<input name="keyword" placeholder="例如 bakery equipment"></label>
         <label>时间范围<select name="days"><option value="">不限时间</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="365">最近一年</option></select></label>

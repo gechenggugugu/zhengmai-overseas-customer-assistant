@@ -2,22 +2,19 @@
 
 零依赖中文静态网站，支持 Windows 11 免安装运行和 GitHub Pages 发布。网站与本地版共用同一套页面和业务模块。
 
-## 正式网址和源码
-
-在线网址：[https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/](https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/)  
-源码仓库：[gechenggugugu/zhengmai-overseas-customer-assistant](https://github.com/gechenggugugu/zhengmai-overseas-customer-assistant)
+国家/地区使用 `backend/supabase/functions/_shared/markets.json` 中的统一列表（ISO 3166-1 两位代码及中英文名称）。页面支持按名称搜索、单选、全部市场全球搜索和马来西亚、阿联酋、澳大利亚、越南、沙特阿拉伯快捷选择。
 
 ## 本机使用
 
-解压 Windows 便携包后双击 `start-windows.bat`。浏览器打开 `http://127.0.0.1:4173/`，关闭启动窗口即可停止。演示模式无需联网；客户记录默认仅保存在当前浏览器。
+解压后双击 `start-windows.bat`。浏览器打开 `http://127.0.0.1:4173/`，关闭启动窗口即可停止。演示模式无需联网；客户记录默认仅保存在当前浏览器。
 
 ## 在线发布
 
-当前由 `main` 分支的 `/(root)` 发布。更新源码后，在 Settings → Pages 检查发布来源。静态演示不需要环境变量；部署说明见 [implementation.html](./implementation.html)。
+正式网址：[https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/](https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/)。源码仓库：[gechenggugugu/zhengmai-overseas-customer-assistant](https://github.com/gechenggugugu/zhengmai-overseas-customer-assistant)。当前由 `main` 分支根目录发布。重新发布时，将项目根目录内容（包括 `backend/supabase/functions/_shared/markets.json`）上传到仓库并在 Settings → Pages 检查发布来源。静态演示不需要环境变量；部署说明见 [implementation.html](./implementation.html)。
 
 ## 云端登录与跨设备同步
 
-前端已包含邮箱认证和云同步接口。要启用需由项目所有者创建 Supabase 项目、执行 `backend/supabase/migrations/` 下的迁移、部署 Edge Function，并在 `public-config.js` 填项目 URL 与 publishable/anon key。该公钥只在启用 RLS 后放入浏览器。搜索 API 密钥只存 Supabase Edge Function Secrets。详细步骤见 [backend/README.md](./backend/README.md)。
+前端已包含邮箱认证和云同步接口。要启用需由项目所有者创建 Supabase 项目、执行 `backend/supabase/migrations/` 下的迁移、部署 Edge Function，并在 `public-config.js` 填项目 URL 与 publishable/anon key。令牌采用 PKCE + 标签页会话存储。搜索 API 密钥只存 Supabase Edge Function Secrets。访客数据须登录后主动点“导入本机记录”。详细步骤见 [backend/README.md](./backend/README.md)。
 
 当前没有配置真实搜索供应商或 Supabase 项目；真实搜索不会回退到演示数据。演示公司的名称、联系方式和 `.example` 链接都是虚构样本。
 

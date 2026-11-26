@@ -19,6 +19,15 @@ test("duplicate sample results collapse by normalized website", async () => {
   assert.equal(leadKey(leads[0]), leadKey(leads.at(-1)));
 });
 
+test("live results from different target markets deduplicate www and bare hostnames", () => {
+  const results = [
+    {name:"Regional Bakery Supply", market:"马来西亚", sourceType:"live", website:"https://www.regional-bakery.example"},
+    {name:"Regional Bakery Supply", market:"新加坡", sourceType:"live", website:"https://regional-bakery.example"}
+  ];
+  assert.equal(uniqueLeads(results).length, 1);
+  assert.equal(leadKey(results[0]), leadKey(results[1]));
+});
+
 test("live search fails clearly until a backend URL is configured", async () => {
   await assert.rejects(searchLeads({...query, mode:"live"}), /真实搜索尚未配置/);
 });
@@ -83,4 +92,20 @@ test("cloud sync imports remote records and uploads newer local changes", async 
   assert.equal(remote.get(leadKey(localLead)).status, "已回复");
   repository.useUser(null);
   repository.setCloudAdapter(null);
+});
+
+test("guest data is copied only into the selected account and remains available locally", async () => {
+  const values = new Map();
+  globalThis.localStorage = {getItem:key=>values.get(key) ?? null, setItem:(key,value)=>values.set(key,value)};
+  const guestLead = {name:"Guest Lead", market:"测试", sourceType:"demo", website:"https://guest-import.example"};
+  repository.useUser(null);
+  repository.put(guestLead,{saved:true,note:"local"});
+  const uploaded=[];
+  repository.setCloudAdapter({async list(){return []},async put(key,record){uploaded.push([key,record]);return {updated_at:record.updatedAt}}});
+  repository.useUser("chosen-user");
+  assert.equal(await repository.importGuestRecords(),1);
+  assert.equal(repository.list()[leadKey(guestLead)].note,"local");
+  assert.equal(uploaded.length,1);
+  assert.equal(Object.keys(repository.guestRecords()).length,1);
+  repository.useUser(null); repository.setCloudAdapter(null);
 });
