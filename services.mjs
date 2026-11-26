@@ -99,6 +99,25 @@ export async function searchLeads(query, signal) {
   }
   return leads;
 }
+export async function searchCompanyContacts(lead, signal) {
+  if (lead.sourceType !== "live") throw new Error("演示样本不支持真实联系人挖掘。");
+  if (!config.searchEndpoint) throw new Error("真实搜索尚未配置。");
+  const headers = {"Content-Type":"application/json"};
+  if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
+  const token = await cloudAdapter?.accessToken?.();
+  if (token) headers.Authorization = "Bearer " + token;
+  const response = await fetch(config.searchEndpoint, {method:"POST", headers,
+    body:JSON.stringify({action:"contacts", company:{name:lead.name, website:lead.website, market:lead.market}}), signal});
+  if (!response.ok) {
+    const message = response.status === 401 ? "请先登录并验证邮箱后再挖掘联系人。" :
+      response.status === 429 ? "搜索配额已用完，请在下个配额周期后重试。" :
+      response.status === 503 ? "真实搜索服务尚未配置或暂不可用。" : "联系人搜索暂不可用（" + response.status + "）。";
+    throw new Error(message);
+  }
+  const payload = await response.json();
+  if (!Array.isArray(payload.contacts)) throw new Error("联系人搜索返回格式不符合接口约定。");
+  return payload;
+}
 // Local browser repository. Replace this adapter with authenticated API calls
 // when account-scoped persistence is introduced.
 export const repository = {
@@ -188,3 +207,4 @@ export function csvEncode(rows) {
     return '"' + neutral.replaceAll('"', '""') + '"';
   }).join(",")).join("\r\n");
 }
+
