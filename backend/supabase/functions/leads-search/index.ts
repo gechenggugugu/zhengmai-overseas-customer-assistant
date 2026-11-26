@@ -12,8 +12,34 @@ function json(body: unknown, status: number, cors: Record<string, string>) {
   });
 }
 
-const allowedOrigins = (Deno.env.get("APP_ORIGINS") || "")
-  .split(",").map(value => value.trim()).filter(Boolean);
+async function readBodyWithinLimit(request: Request, limit: number): Promise<string | null> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+const allowedOrigins = [...new Set([
+  "http://127.0.0.1:4173",
+  ...(Deno.env.get("APP_ORIGINS") || "").split(",").map(value => value.trim()).filter(Boolean)
+])];
 const safeUrl = (value: unknown) => {
   try {
     const url = new URL(String(value || ""));
@@ -24,8 +50,8 @@ const safeUrl = (value: unknown) => {
 Deno.serve(async request => {
   const origin = request.headers.get("Origin");
   const cors = corsHeaders(origin, allowedOrigins);
-  if (request.method === "OPTIONS") return new Response(null, {status:204, headers:cors});
   if (origin && !allowedOrigins.includes(origin)) return json({error:"origin_not_allowed"}, 403, cors);
+  if (request.method === "OPTIONS") return new Response(null, {status:204, headers:cors});
   if (request.method !== "POST") return json({error:"method_not_allowed"}, 405, cors);
 
   const authorization = request.headers.get("Authorization") || "";
@@ -36,14 +62,15 @@ Deno.serve(async request => {
 
   // Verify the caller's session against Supabase Auth. No service-role key is used.
   const identity = await fetch(projectUrl + "/auth/v1/user", {
-    headers:{apikey:publicKey, Authorization:"Bearer " + bearer}
+    headers:{apikey:publicKey, Authorization:"Bearer " + bearer},
+    signal:AbortSignal.timeout(8_000)
   }).catch(() => null);
   if (!identity?.ok) return json({error:"invalid_session"}, 401, cors);
 
-  const providerUrl = Deno.env.get("SEARCH_API_URL");
+  const providerUrl = Deno.env.get("SEARCH_API_URL") || "";
   const providerKey = Deno.env.get("SEARCH_API_KEY");
-  if (!providerUrl || !providerKey) return json({error:"search_provider_not_configured"}, 503, cors);
-  try {
+  if (!providerKey) return json({error:"search_provider_not_configured"}, 503, cors);
+  if (providerUrl) try {
     const parsedProviderUrl = new URL(providerUrl);
     if (parsedProviderUrl.protocol !== "https:" || parsedProviderUrl.username || parsedProviderUrl.password) {
       return json({error:"invalid_search_provider_url"}, 503, cors);
@@ -52,51 +79,159 @@ Deno.serve(async request => {
 
   let query: Record<string, unknown>;
   try {
-    const raw = await request.text();
-    if (raw.length > 12_000) return json({error:"request_too_large"}, 413, cors);
-    query = JSON.parse(raw);
+    const contentLength = Number(request.headers.get("Content-Length") || 0);
+    if (contentLength > 12_000) return json({error:"request_too_large"}, 413, cors);
+    const raw = await readBodyWithinLimit(request, 12_000);
+    if (raw === null) return json({error:"request_too_large"}, 413, cors);
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json({error:"invalid_search_input"}, 400, cors);
+    query = parsed as Record<string, unknown>;
   } catch { return json({error:"invalid_json"}, 400, cors); }
   if (!query || typeof query.product !== "string" || !query.product.trim()) {
     return json({error:"product_required"}, 400, cors);
   }
-  if (!["", "30", "90", "365"].includes(String(query.days ?? ""))) {
+  if (query.product.trim().length > 120 ||
+      !["market", "type", "keyword"].every(key => query[key] === undefined ||
+        (typeof query[key] === "string" && query[key].length <= (key === "keyword" ? 120 : 100)))) {
+    return json({error:"invalid_search_input"}, 400, cors);
+  }
+  if (query.days !== undefined && !["", "30", "90", "365", 30, 90, 365].includes(query.days as string | number)) {
     return json({error:"invalid_days"}, 400, cors);
   }
 
-  const dailyLimit = Number(Deno.env.get("SEARCH_DAILY_LIMIT") || 50);
+  const provider = Deno.env.get("SEARCH_PROVIDER") || "tavily";
+  if (!["tavily", "brave"].includes(provider)) return json({error:"search_provider_not_configured"}, 503, cors);
+
   const quota = await fetch(projectUrl + "/rest/v1/rpc/consume_search_daily_limit", {
     method:"POST",
     headers:{apikey:publicKey, Authorization:"Bearer " + bearer, "Content-Type":"application/json"},
-    body:JSON.stringify({p_daily_limit:dailyLimit})
+    body:"{}"
   }).catch(() => null);
   if (!quota?.ok) return json({error:"search_limit_unavailable"}, 503, cors);
-  if (await quota.json().catch(() => false) !== true) return json({error:"daily_search_limit_reached"}, 429, cors);
+  const quotaResult = await quota.json().catch(() => null);
+  if (quotaResult === false) return json({error:"daily_search_limit_reached"}, 429, cors);
+  if (quotaResult !== true) return json({error:"search_limit_unavailable"}, 503, cors);
 
   try {
-    // Configure a provider adapter/gateway that accepts this JSON query and
-    // returns {leads:[...]}. SEARCH_API_KEY stays in the function secret store.
-    const upstream = await fetch(providerUrl, {
-      method:"POST",
-      headers:{"Content-Type":"application/json", Authorization:"Bearer " + providerKey},
-      body:JSON.stringify({...query, mode:"live", limit:100}),
-      signal:AbortSignal.timeout(20_000)
-    });
-    if (!upstream.ok) return json({error:"search_provider_error", status:upstream.status}, 502, cors);
-    const payload = await upstream.json();
+    const payload = await searchWithProvider(provider, providerUrl, providerKey, query);
     if (!Array.isArray(payload?.leads)) return json({error:"invalid_provider_response"}, 502, cors);
-    const leads = payload.leads.slice(0, 100).map((lead: Record<string, unknown>) => ({
-      name:String(lead.name ?? "").trim(),
+    let leads = payload.leads.slice(0, 100).map((lead: Record<string, unknown>) => ({
+      name:String(lead.name ?? "").trim().slice(0, 240),
       market:String(lead.market ?? ""),
+      marketStatus:String(lead.marketStatus ?? "待核实"),
       type:String(lead.type ?? ""),
+      typeStatus:String(lead.typeStatus ?? "待核实"),
       business:String(lead.business ?? ""),
       website:safeUrl(lead.website),
-      contact:String(lead.contact ?? ""),
-      reason:String(lead.reason ?? ""),
+      websiteStatus:String(lead.websiteStatus ?? "搜索结果站点，尚未核实为公司官网"),
+      nameStatus:String(lead.nameStatus ?? "搜索结果标题，需确认公司主体"),
+      contact:String(lead.contact ?? "").slice(0, 320),
+      contactStatus:String(lead.contactStatus ?? "未获取").slice(0, 120),
+      matchScore:Math.max(0, Math.min(100, Number(lead.matchScore) || 0)),
+      emailDraft:String(lead.emailDraft ?? "").slice(0, 5000),
+      reason:String(lead.reason ?? "").slice(0, 500),
       source:safeUrl(lead.source),
       date:String(lead.date ?? "")
-    })).filter((lead: Record<string, string>) => lead.name && lead.source);
+    })).filter((lead: Record<string, unknown>) => Boolean(lead.name && lead.source));
+    leads = await maybeAiEnrich(leads, query);
     return json({leads}, 200, cors);
   } catch {
     return json({error:"search_provider_unavailable"}, 502, cors);
   }
 });
+
+async function maybeAiEnrich(leads: Record<string, unknown>[], query: Record<string, unknown>) {
+  const endpoint = Deno.env.get("AI_API_URL"), key = Deno.env.get("AI_API_KEY"), model = Deno.env.get("AI_MODEL");
+  if (!endpoint || !key || !model || leads.length === 0) return leads;
+  try {
+    if (new URL(endpoint).protocol !== "https:") return leads;
+    const aiResults = leads.slice(0,20);
+    const response = await fetch(endpoint, {method:"POST", headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"},
+      body:JSON.stringify({model, temperature:0, max_tokens:5000, response_format:{type:"json_object"}, messages:[
+        {role:"system",content:"Evaluate B2B fit for a commercial bakery equipment manufacturer. Use only supplied search evidence. Never infer or invent contact details, countries, product claims, or facts. Return JSON {items:[{source,score,reason,emailDraft}]}. Scores are advisory and require human review. Draft a short English first-contact email with placeholders where evidence is missing; do not claim prior contact or verified facts."},
+        {role:"user",content:JSON.stringify({criteria:{product:query.product,market:query.market,type:query.type},results:aiResults.map(({name,market,type,business,source,contact})=>({name,market,type,business:String(business||"").slice(0,900),source,contact}))})}
+      ]}),signal:AbortSignal.timeout(12_000)});
+    if (!response.ok) return leads;
+    const result = await response.json();
+    const parsed = JSON.parse(result.choices?.[0]?.message?.content || "{}");
+    const bySource = new Map((parsed.items || []).filter((item: Record<string, unknown>) => typeof item.source === "string")
+      .map((item: Record<string, unknown>) => [item.source, item]));
+    return leads.map(lead => {
+      const item = bySource.get(lead.source) as Record<string, unknown> | undefined;
+      if (!item) return lead;
+      return {...lead, matchScore:Math.max(0, Math.min(100, Number(item.score) || Number(lead.matchScore) || 0)),
+        reason:String(item.reason || lead.reason).slice(0,500),
+        emailDraft:typeof item.emailDraft === "string" ? item.emailDraft.slice(0,5000) : ""};
+    });
+  } catch { return leads; }
+}
+
+function companyTerms(query: Record<string, unknown>, language: string) {
+  const product = String(query.product || "commercial bakery equipment");
+  const type = String(query.type || "importer distributor");
+  const market = String(query.market || "");
+  const keyword = String(query.keyword || "");
+  const terms: Record<string, string> = {
+    en:`${product} ${type} ${market} bakery equipment ${keyword}`, zh:`${market} ${product} 烘焙设备 ${type} 进口商 经销商 ${keyword}`,
+    es:`${market} equipos de panadería ${type} ${product} ${keyword}`, fr:`${market} équipement boulangerie ${type} ${product} ${keyword}`,
+    de:`${market} Bäckereitechnik ${type} ${product} ${keyword}`, ar:`${market} معدات مخابز ${type} ${product} ${keyword}`
+  };
+  return terms[language] || `${product} ${type}`;
+}
+
+async function searchWithProvider(provider: string, endpoint: string, key: string, query: Record<string, unknown>) {
+  // One authenticated request consumes one quota unit. Keep provider calls at one
+  // basic search (one Tavily credit) so quota and external usage stay aligned.
+  const languages = ["en"];
+  const searches = await Promise.all(languages.map(async language => {
+    const text = companyTerms(query, language);
+    let response: Response;
+    if (provider === "tavily") {
+      const countryNames: Record<string,string> = {"美国":"united states","马来西亚":"malaysia","阿联酋":"united arab emirates","澳大利亚":"australia","越南":"vietnam","沙特阿拉伯":"saudi arabia","英国":"united kingdom","德国":"germany","法国":"france","日本":"japan","加拿大":"canada"};
+      const days = Number(query.days || 0);
+      const endDate = new Date().toISOString().slice(0, 10);
+      const startDate = days ? new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10) : undefined;
+      response = await fetch(endpoint || "https://api.tavily.com/search", {
+        method:"POST", headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"},
+        body:JSON.stringify({query:text, search_depth:"basic", max_results:10, topic:"general", language,
+          country:countryNames[String(query.market || "")] || null, include_answer:false, include_usage:true,
+          ...(startDate ? {start_date:startDate, end_date:endDate, include_published_date:true} : {})}),
+        signal:AbortSignal.timeout(20_000)
+      });
+    } else if (provider === "brave") {
+      const url = new URL(endpoint || "https://api.search.brave.com/res/v1/web/search");
+      url.searchParams.set("q", text); url.searchParams.set("count", "10");
+      const countryCodes: Record<string, string> = {"美国":"US","马来西亚":"MY","阿联酋":"AE","澳大利亚":"AU","越南":"VN","沙特阿拉伯":"SA","英国":"GB","德国":"DE","法国":"FR","日本":"JP","加拿大":"CA"};
+      if (query.market && countryCodes[String(query.market)]) url.searchParams.set("country", countryCodes[String(query.market)]);
+      url.searchParams.set("search_lang", language);
+      response = await fetch(url, {headers:{"X-Subscription-Token":key}, signal:AbortSignal.timeout(20_000)});
+    } else throw new Error("unsupported_provider");
+    if (!response.ok) throw new Error("provider_http_error");
+    const data = await response.json();
+    const items = provider === "tavily" ? (data.results || []) : (data.web?.results || []);
+    return items.map((item: Record<string, unknown>) => ({item, language}));
+  }));
+  const seen = new Set<string>();
+  const leads = searches.flat().map(({item, language}) => {
+    const url = safeUrl(item.url);
+    const title = String(item.title || "").trim();
+    const content = String(item.content || item.description || "").slice(0, 1600);
+    if (!url || !title) return null;
+    const website = new URL(url).origin;
+    if (seen.has(website)) return null;
+    seen.add(website);
+    const emails = content.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) || [];
+    const evidence = title + " " + content;
+    const marketAliases: Record<string,string[]> = {"马来西亚":["malaysia"],"阿联酋":["united arab emirates","uae"],"澳大利亚":["australia"],"越南":["vietnam"],"沙特阿拉伯":["saudi arabia"],"美国":["united states","usa"],"英国":["united kingdom","uk"],"德国":["germany"],"法国":["france"],"日本":["japan"],"加拿大":["canada"]};
+    const requestedMarket = String(query.market || "");
+    const market = requestedMarket && [requestedMarket,...(marketAliases[requestedMarket] || [])].some(value => evidence.toLowerCase().includes(value.toLowerCase())) ? requestedMarket : "待核实";
+    const kind = /(importer|进口商)/i.test(evidence) ? "设备进口商" : /(distributor|dealer|wholesale|经销商|批发)/i.test(evidence) ? "设备经销商" : /(integrator|engineering|工程集成)/i.test(evidence) ? "工程集成商" : "待核实";
+    const score = Math.min(95, 35 + (/(bakery|bake|oven|烘焙|bakker|boulanger|panader)/i.test(evidence) ? 30 : 0) + (/(distributor|importer|dealer|wholesale|经销|进口|grosshandel)/i.test(evidence) ? 25 : 0));
+    return {name:title, nameStatus:"搜索结果标题，需确认公司主体", market, marketStatus:market === "待核实" ? "摘要未能确认国家 / 地区" : "摘要提及目标市场，仍需人工核实", type:kind, typeStatus:kind === "待核实" ? "摘要未能确认客户类型" : "由摘要关键词初步识别，仍需人工核实", business:content,
+      website, contact:emails[0] || "", contactStatus:emails.length ? "搜索摘要公开出现 · 请点开来源核实" : "未获取",
+      websiteStatus:"搜索结果站点，尚未核实为公司官网",
+      reason:`搜索摘要匹配评分 ${score}/100（规则初筛，需人工复核）`, matchScore:score, source:url,
+      date:String(item.published_date || ""), language, sourceType:"live"};
+  }).filter(Boolean);
+  return {leads};
+}
