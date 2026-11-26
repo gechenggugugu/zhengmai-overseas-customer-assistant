@@ -2,13 +2,18 @@
 
 零依赖中文静态网站，支持 Windows 11 免安装运行和 GitHub Pages 发布。网站与本地版共用同一套页面和业务模块。
 
+## 正式网址和源码
+
+在线网址：[https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/](https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/)  
+源码仓库：[gechenggugugu/zhengmai-overseas-customer-assistant](https://github.com/gechenggugugu/zhengmai-overseas-customer-assistant)
+
 ## 本机使用
 
-解压后双击 `start-windows.bat`。浏览器打开 `http://127.0.0.1:4173/`，关闭启动窗口即可停止。演示模式无需联网；客户记录默认仅保存在当前浏览器。
+解压 Windows 便携包后双击 `start-windows.bat`。浏览器打开 `http://127.0.0.1:4173/`，关闭启动窗口即可停止。演示模式无需联网；客户记录默认仅保存在当前浏览器。
 
 ## 在线发布
 
-将项目根目录内容上传到 GitHub 仓库。GitHub Free 使用 Pages 需公开仓库，在 Settings → Pages 选择从 `main` 分支的 `/(root)` 发布。需要 GitHub 账号与仓库管理权限。静态演示不需要环境变量；部署说明见 [implementation.html](./implementation.html)。
+当前由 `main` 分支的 `/(root)` 发布。更新源码后，在 Settings → Pages 检查发布来源。静态演示不需要环境变量；部署说明见 [implementation.html](./implementation.html)。
 
 ## 云端登录与跨设备同步
 
@@ -19,4 +24,3 @@
 ## 验证
 
 安装 Node.js 后运行 `node --test tests/*.test.mjs`。应用与 Windows 启动不依赖 Node.js；Node 仅运行开发测试。
-
