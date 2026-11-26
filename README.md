@@ -16,8 +16,9 @@
 
 前端已包含邮箱认证和云同步接口。要启用需由项目所有者创建 Supabase 项目、执行 `backend/supabase/migrations/` 下的迁移、部署 Edge Function，并在 `public-config.js` 填项目 URL 与 publishable/anon key。令牌采用 PKCE + 标签页会话存储。搜索 API 密钥只存 Supabase Edge Function Secrets。访客数据须登录后主动点“导入本机记录”。详细步骤见 [backend/README.md](./backend/README.md)。
 
-当前没有配置真实搜索供应商或 Supabase 项目；真实搜索不会回退到演示数据。演示公司的名称、联系方式和 `.example` 链接都是虚构样本。
+当前未在公开配置中填写 Supabase 公钥或搜索供应商密钥；真实搜索不会回退到演示数据。联系人挖掘仅对真实企业按需开放，并复用同一登录保护接口及搜索额度。演示公司的名称、联系方式和 `.example` 链接都是虚构样本。
 
 ## 验证
 
 安装 Node.js 后运行 `node --test tests/*.test.mjs`。应用与 Windows 启动不依赖 Node.js；Node 仅运行开发测试。
+
