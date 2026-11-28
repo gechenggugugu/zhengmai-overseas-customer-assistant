@@ -1,0 +1,26 @@
+{
+  "status": "local review candidate; not published or deployed",
+  "files": [
+    "backend/supabase/config.toml",
+    "backend/supabase/functions/_shared/markets.json",
+    "backend/supabase/functions/leads-search/_shared/markets.json",
+    "backend/supabase/functions/leads-search/diagnostics.mjs",
+    "backend/supabase/functions/leads-search/index.ts",
+    "backend/supabase/functions/leads-search/quota-lifecycle.mjs",
+    "backend/supabase/functions/quota-admin/index.ts",
+    "backend/supabase/migrations/20261126000100_lead_records.sql",
+    "backend/supabase/migrations/20261126000200_search_quota_limits.sql",
+    "backend/supabase/migrations/20261126000250_search_quota_access_hardening.sql",
+    "backend/supabase/migrations/20261126000300_search_quota_management.sql",
+    "backend/supabase/migrations/20261127000100_search_quota_policy_cache.sql",
+    "backend/supabase/migrations/20261127000200_search_quota_server_access.sql",
+    "backend/deployment/staging-quota/candidate-migrations/20261128190000_special_quota_authorization_registry.sql"
+  ],
+  "excluded": [
+    "backend/supabase/migrations/20261127000300_search_quota_admin_edge_only.sql",
+    "backend/supabase/migrations/20261127000400_configure_shelly_quota_uuid.sql",
+    "backend/deployment/quota-rollout/",
+    "backend/.env*",
+    "backend/supabase/functions/.env"
+  ]
+}

@@ -1,3 +1,7 @@
 [functions.leads-search]
 # The function performs its own Supabase Auth user-token verification.
 verify_jwt = false
+
+[functions.quota-admin]
+# The function verifies the caller's Supabase Auth token before admin actions.
+verify_jwt = false

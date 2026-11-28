@@ -25,6 +25,7 @@ create trigger lead_records_touch_updated_at
   for each row execute function public.touch_lead_record_updated_at();
 
 alter table public.lead_records enable row level security;
+revoke all on table public.lead_records from public, anon;
 grant select, insert, update, delete on public.lead_records to authenticated;
 
 drop policy if exists "Users read their own lead records" on public.lead_records;
@@ -55,8 +56,17 @@ create table if not exists public.search_daily_usage (
   primary key (owner_id, usage_date)
 );
 revoke all on public.search_daily_usage from public, anon, authenticated;
+alter table public.search_daily_usage enable row level security;
 
-create or replace function public.consume_search_daily_limit(p_daily_limit integer default 50)
+create table if not exists public.search_monthly_usage (
+  usage_month date primary key,
+  request_count integer not null default 0 check (request_count >= 0)
+);
+revoke all on public.search_monthly_usage from public, anon, authenticated;
+alter table public.search_monthly_usage enable row level security;
+
+drop function if exists public.consume_search_daily_limit(integer);
+create or replace function public.consume_search_daily_limit()
 returns boolean
 language plpgsql
 security definer
@@ -66,7 +76,7 @@ declare
   current_user_id uuid := auth.uid();
   updated_rows integer;
 begin
-  if current_user_id is null or p_daily_limit < 1 or p_daily_limit > 1000 then
+  if current_user_id is null then
     return false;
   end if;
   insert into public.search_daily_usage(owner_id, usage_date, request_count)
@@ -75,10 +85,27 @@ begin
   update public.search_daily_usage
     set request_count = request_count + 1
     where owner_id = current_user_id and usage_date = current_date
-      and request_count < p_daily_limit;
+      and request_count < 5;
   get diagnostics updated_rows = row_count;
-  return updated_rows = 1;
+  if updated_rows <> 1 then
+    return false;
+  end if;
+  insert into public.search_monthly_usage(usage_month, request_count)
+    values (date_trunc('month', current_date)::date, 0)
+    on conflict (usage_month) do nothing;
+  update public.search_monthly_usage
+    set request_count = request_count + 1
+    where usage_month = date_trunc('month', current_date)::date
+      and request_count < 150;
+  get diagnostics updated_rows = row_count;
+  if updated_rows <> 1 then
+    update public.search_daily_usage
+      set request_count = request_count - 1
+      where owner_id = current_user_id and usage_date = current_date;
+    return false;
+  end if;
+  return true;
 end;
 $$;
-revoke all on function public.consume_search_daily_limit(integer) from public, anon;
-grant execute on function public.consume_search_daily_limit(integer) to authenticated;
+revoke all on function public.consume_search_daily_limit() from public, anon, authenticated, service_role;
+grant execute on function public.consume_search_daily_limit() to authenticated;
