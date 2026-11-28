@@ -20,15 +20,15 @@
     <button data-page="saved">☆　我的收藏</button>
     <button data-page="follow">▤　跟进记录</button>
   </nav>
-  <div class="sidefoot"><span>演示工作区</span><small>记录保存在当前浏览器</small></div>
+  <div class="sidefoot"><span id="workspace-storage-label">演示工作区</span><small id="workspace-storage-detail">记录保存在当前浏览器</small></div>
 </aside>
 <main>
-  <header class="top"><span>海外销售工作台</span><span class="tag">演示模式</span></header>
+  <header class="top"><span>海外销售工作台</span><span class="tag" id="workspace-mode">演示模式</span></header>
   <div class="content">
     <h1>正麦海外客户开发助手</h1>
     <p class="intro">查找商用烘焙设备经销商与进口商，整理线索并准备首次联系。</p>
     <section class="panel cloud-panel" id="cloud-panel" hidden>
-      <div class="section-heading"><div><h2>跨设备云端同步</h2><p>登录同一账号后，收藏和跟进记录会在已登录设备间同步。</p></div><span id="cloud-state" class="badge">未登录</span></div>
+      <div class="section-heading"><div><h2>跨设备云端同步</h2><p>登录同一账号后，收藏和跟进记录会在已登录设备间同步。</p></div><span id="cloud-state" class="badge" role="status" aria-live="polite">未登录</span></div>
       <form id="cloud-auth-form">
         <label>邮箱<input name="email" type="email" autocomplete="username" required></label>
         <label>密码<input name="password" type="password" autocomplete="current-password" minlength="8" required></label>
@@ -61,12 +61,28 @@
       </form>
     </section>
     <div id="mode-note" class="notice" role="status"></div>
-    <section class="panel results">
+    <div id="search-feedback" class="notice" role="status" aria-live="polite" hidden></div>
+    <section class="panel quota-panel" id="quota-panel" hidden aria-live="polite">
+      <div class="section-heading"><div><h2>搜索配额</h2><p id="quota-summary">登录后查看当前配额</p></div></div>
+      <div class="quota-details" id="quota-details"></div>
+      <form id="quota-admin-form" hidden>
+        <p>管理员每日固定最多 60 次；Shelly 账号每日不限次数（仍受项目月额度约束）。</p>
+        <label>全项目每月共享额度<input name="monthlyLimit" type="number" min="1" max="1000" required></label>
+        <div class="form-actions"><button class="primary" type="submit">保存月度额度</button></div>
+      </form>
+      <form id="shelly-user-form" hidden>
+        <p>从 Supabase Auth 用户列表复制已批准账号的 UUID。服务端会再次核验该账号的授权资格。</p>
+        <label>Shelly 的 Supabase Auth UUID<input name="userId" type="text" inputmode="text" autocomplete="off" placeholder="从 Supabase Auth 用户列表复制 UUID"></label>
+        <small id="shelly-config-status">未配置时，不会向任何用户开放每日无限额度。</small>
+        <div class="form-actions"><button class="primary" type="submit">授权此 UUID</button><button id="clear-shelly-user" type="button">取消 Shelly 授权</button></div>
+      </form>
+    </section>
+    <section class="panel results" id="results-panel" aria-busy="false">
       <div class="section-heading"><div><h2 id="view-title">搜索结果</h2><p id="count" aria-live="polite"></p></div><button id="export">导出 CSV</button></div>
       <div class="filters"><input id="filter" aria-label="筛选线索" placeholder="筛选公司、国家或主营业务"><select id="status-filter" aria-label="筛选跟进状态"><option value="">全部状态</option></select><label class="check"><input type="checkbox" id="dedupe" checked>自动去重</label></div>
-      <div class="table-wrap"><table><thead><tr><th>公司与官网</th><th>国家 / 地区</th><th>客户类型与主营</th><th>跟进状态</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th scope="col">公司与官网</th><th scope="col">国家 / 地区</th><th scope="col">客户类型与主营</th><th scope="col">跟进状态</th><th scope="col">操作</th></tr></thead><tbody id="rows" aria-live="polite"></tbody></table></div>
     </section>
-    <footer><a href="./implementation.html" target="_blank" rel="noopener">实现与接入说明</a></footer>
+    <footer><a href="./implementation.html" target="_blank" rel="noopener">使用说明</a></footer>
   </div>
 </main>
 <dialog id="details"><div class="dialog-head"><h2 id="detail-title">客户详情</h2><button id="close" aria-label="关闭详情">关闭</button></div><div id="detail-body"></div></dialog>

@@ -1,83 +1,82 @@
-const SESSION_KEY = "zhengmai.auth.session.v1";
+// Uses the official Supabase JS SDK loaded by index.html. Auth tokens are kept
+// in sessionStorage with PKCE; this reduces persistence but does not mitigate XSS.
+const RECORD_PAGE_SIZE = 250;
+const RECORD_FIELDS = "record_key,record,updated_at";
+function fromCloudRow(row) {
+  const {syncRevision,pendingSync,localConflict,...record} = row.record || {};
+  return {...record, updatedAt:row.updated_at, syncRevision:row.updated_at};
+}
 
-export function createCloudStore(config) {
-  let session = null;
-  const configured = Boolean(config.supabaseUrl && config.supabaseAnonKey);
-  const apiHeaders = extra => ({apikey:config.supabaseAnonKey, "Content-Type":"application/json", ...extra});
-
-  function saveSession(value) {
-    session = value?.access_token ? {
-      access_token:value.access_token,
-      refresh_token:value.refresh_token,
-      expires_at:Date.now() + Number(value.expires_in || 3600) * 1000,
-      user:value.user || session?.user
-    } : null;
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else localStorage.removeItem(SESSION_KEY);
-    return session;
-  }
-
-  async function auth(path, payload) {
-    const response = await fetch(config.supabaseUrl + "/auth/v1/" + path, {
-      method:"POST", headers:apiHeaders(), body:JSON.stringify(payload)
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.msg || result.message || result.error_description || "云端账号请求失败");
-    return result;
-  }
-
-  async function currentSession() {
-    if (!configured) return null;
-    if (!session) {
-      try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); }
-      catch { session = null; }
-    }
-    if (!session) return null;
-    if (session.expires_at - Date.now() < 60_000) {
-      try { saveSession(await auth("token?grant_type=refresh_token", {refresh_token:session.refresh_token})); }
-      catch { saveSession(null); }
-    }
-    return session;
-  }
-
-  async function dataRequest(path, options = {}) {
-    const active = await currentSession();
-    if (!active) throw new Error("请先登录云端账号。");
-    const response = await fetch(config.supabaseUrl + "/rest/v1/" + path, {
-      ...options,
-      headers:apiHeaders({Authorization:"Bearer " + active.access_token, ...(options.headers || {})})
-    });
-    if (!response.ok) {
-      const result = await response.json().catch(() => ({}));
-      throw new Error(result.message || "云端同步失败（" + response.status + "）");
-    }
-    return response.status === 204 ? null : response.json();
-  }
-
+export function createCloudStore(config, sdk = globalThis.supabase) {
+  const configured = Boolean(config.supabaseUrl && config.supabaseAnonKey && sdk?.createClient);
+  const client = configured ? sdk.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+    auth:{flowType:"pkce", storage:globalThis.sessionStorage, persistSession:true,
+      autoRefreshToken:true, detectSessionInUrl:true}
+  }) : null;
+  const unwrap = ({data, error}) => { if (error) throw new Error(error.message || "云端请求失败"); return data; };
   return {
     isConfigured:() => configured,
-    restoreSession:currentSession,
-    accessToken:async () => (await currentSession())?.access_token || "",
-    signIn:async (email, password) => saveSession(await auth("token?grant_type=password", {email, password})),
+    restoreSession:async () => unwrap(await client.auth.getSession())?.session || null,
+    accessToken:async () => (await client.auth.getSession()).data?.session?.access_token || "",
+    getQuotaStatus:async () => unwrap(await client.rpc("get_search_quota_status")),
+    setQuotaLimits:async monthlyLimit => {
+      const result = unwrap(await client.functions.invoke("quota-admin", {body:{action:"set_monthly_limit", monthlyLimit}}));
+      return result?.result;
+    },
+    setShellyUser:async userId => {
+      const result = unwrap(await client.functions.invoke("quota-admin", {body:{action:"set_shelly_user", userId:userId || null}}));
+      return result?.result;
+    },
+    onAuthStateChange:callback => client.auth.onAuthStateChange((_event, session) => callback(session)),
+    signIn:async (email, password) => unwrap(await client.auth.signInWithPassword({email:String(email).trim().toLowerCase(), password})).session,
     signUp:async (email, password) => {
-      const result = await auth("signup", {email, password});
-      if (result.access_token) return saveSession(result);
-      return null;
+      const result = unwrap(await client.auth.signUp({email, password, options:{emailRedirectTo:location.origin + location.pathname}}));
+      return result.session;
     },
-    signOut:async () => {
-      const active = await currentSession();
-      try {
-        if (active) await fetch(config.supabaseUrl + "/auth/v1/logout", {
-          method:"POST", headers:apiHeaders({Authorization:"Bearer " + active.access_token})
-        });
-      } finally { saveSession(null); }
+    signOut:async () => unwrap(await client.auth.signOut()),
+    list:async ownerId => {
+      if (!ownerId) throw new Error("请重新登录云端账号。");
+      const records = [];
+      const seenKeys = new Set();
+      let after = null;
+      while (true) {
+        let page = client.from("lead_records").select(RECORD_FIELDS)
+          .eq("owner_id", ownerId).order("record_key", {ascending:true}).limit(RECORD_PAGE_SIZE);
+        if (after !== null) page = page.gt("record_key", after);
+        const rows = unwrap(await page);
+        if (!Array.isArray(rows)) throw new Error("云端记录格式无效。");
+        // A lower server limit may produce short pages before the end.
+        if (rows.length === 0) return records;
+        for (const row of rows) {
+          if (typeof row?.record_key !== "string" || !row.record_key || seenKeys.has(row.record_key)) {
+            throw new Error("云端记录分页异常，请稍后重试。");
+          }
+          seenKeys.add(row.record_key);
+          records.push({...row, record:fromCloudRow(row)});
+        }
+        after = rows.at(-1).record_key;
+      }
     },
-    list:async () => (await dataRequest("lead_records?select=record_key,record,updated_at&order=updated_at.asc"))
-      .map(row => ({...row, record:{...row.record, updatedAt:row.updated_at}})),
-    put:(recordKey, record) => currentSession().then(active => dataRequest(
-      "lead_records?on_conflict=owner_id%2Crecord_key",
-      {method:"POST", headers:{Prefer:"resolution=merge-duplicates,return=representation"},
-        body:JSON.stringify({owner_id:active.user.id, record_key:recordKey, record, updated_at:record.updatedAt || new Date().toISOString()})}
-    )).then(rows => Array.isArray(rows) ? rows[0] : null)
+    put:async (recordKey, record, ownerId) => {
+      const {data:{user}, error:userError} = await client.auth.getUser();
+      if (userError || !user || user.id !== ownerId) throw new Error("登录账号已变更，请重新同步。");
+      const {syncRevision,pendingSync,localConflict,...payload} = record;
+      const table = () => client.from("lead_records");
+      const forRecord = query => query.eq("owner_id",ownerId).eq("record_key",recordKey);
+      let saved = null;
+      if (syncRevision || Number.isFinite(Date.parse(record.updatedAt))) {
+        const update = forRecord(table().update({record:payload}));
+        const guarded = syncRevision ? update.eq("updated_at",syncRevision) : update.lt("updated_at",record.updatedAt);
+        saved = unwrap(await guarded.select(RECORD_FIELDS).maybeSingle());
+      }
+      if (!saved && !syncRevision) {
+        saved = unwrap(await table().upsert({owner_id:ownerId,record_key:recordKey,record:payload},
+          {onConflict:"owner_id,record_key",ignoreDuplicates:true}).select(RECORD_FIELDS).maybeSingle());
+      }
+      if (saved) return saved;
+      const latest = unwrap(await forRecord(table().select(RECORD_FIELDS)).maybeSingle());
+      if (!latest) throw new Error("云端记录已变更，请重新同步。");
+      return {conflictRecord:fromCloudRow(latest)};
+    }
   };
 }
