@@ -63,13 +63,6 @@ Deno.serve(async request => {
       });
       return json({ok:true, result}, 200, cors);
     }
-    if (body.action === "set_shelly_user" && (body.userId === null ||
-        (typeof body.userId === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.userId)))) {
-      const result = await callAdminRpc("admin_set_shelly_user_server", {
-        p_admin_user_id:userId, p_user_id:body.userId
-      });
-      return json({ok:true, result}, 200, cors);
-    }
     return json({error:"invalid_admin_action"}, 400, cors);
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? String(error.code) : "admin_operation_failed";

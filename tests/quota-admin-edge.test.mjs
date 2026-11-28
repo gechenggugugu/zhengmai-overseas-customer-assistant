@@ -30,7 +30,7 @@ test("quota-admin verifies Auth identity and routes admin RPCs through service c
         }
       }
     });
-    for (const scenario of ["monthly", "shelly", "not-admin", "invalid-session"]) {
+    for (const scenario of ["monthly", "unsupported-identity-action", "not-admin", "invalid-session"]) {
       await t.test(scenario, async () => {
         const calls = [];
         globalThis.fetch = async (input, options) => {
@@ -47,17 +47,15 @@ test("quota-admin verifies Auth identity and routes admin RPCs through service c
           return Response.json({monthly_limit:1000, configured:true});
         };
         const body = scenario === "monthly" ? {action:"set_monthly_limit", monthlyLimit:1000} :
-          {action:"set_shelly_user", userId:randomUUID()};
+          scenario === "unsupported-identity-action" ? {action:"set_shelly_user", userId:randomUUID()} : {action:"unknown"};
         const response = await handler(new Request(`${url}/functions/v1/quota-admin`, {
           method:"POST", headers:{Authorization:"Bearer test-user", "Content-Type":"application/json"}, body:JSON.stringify(body)
         }));
-        assert.equal(response.status, scenario === "invalid-session" ? 401 : scenario === "not-admin" ? 403 : 200);
+        assert.equal(response.status, scenario === "invalid-session" ? 401 : scenario === "not-admin" ? 403 :
+          scenario === "unsupported-identity-action" ? 400 : 200);
         if (scenario === "monthly") {
           assert.deepEqual(calls[0], {name:"admin_set_search_quota_limits_server",
             args:{p_admin_user_id:admin,p_monthly_limit:1000}});
-        } else if (scenario === "shelly") {
-          assert.deepEqual(calls[0], {name:"admin_set_shelly_user_server",
-            args:{p_admin_user_id:admin,p_user_id:body.userId}});
         } else assert.equal(calls.length, 0);
         assert.doesNotMatch(await response.text(), /test-server|test-user/);
       });

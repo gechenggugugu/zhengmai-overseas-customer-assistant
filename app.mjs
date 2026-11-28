@@ -178,12 +178,13 @@ function renderQuota() {
   if (!visible) return;
   const quota = state.quota;
   $("quota-admin-form").hidden = !quota?.is_admin;
-  $("shelly-user-form").hidden = !quota?.is_admin;
+  const specialQuotaStatus = $("special-quota-status");
+  specialQuotaStatus.hidden = !quota?.is_admin;
   if (quota?.is_admin) {
     adminForm.elements.namedItem("monthlyLimit").value = quota.monthly_limit;
-    $("shelly-config-status").textContent = quota.shelly_user_configured
-      ? "已配置 Shelly UUID：" + (quota.shelly_user_id || "仅管理员可见")
-      : "尚未配置；不会向任何用户开放每日无限额度。请从 Supabase Auth 用户列表复制实际 UUID。";
+    specialQuotaStatus.textContent = quota.shelly_user_configured
+      ? "专属额度例外已由受控流程配置。"
+      : "专属额度例外尚未由受控流程配置。";
   }
   if (!quota) {
     $("quota-summary").textContent = state.quotaError || "正在读取配额…";
@@ -384,19 +385,6 @@ $("quota-admin-form").onsubmit = async event => {
   } catch {
     notify("配额更新失败：当前账号未获管理员授权或请求暂不可用。");
   }
-};
-$("shelly-user-form").onsubmit = async event => {
-  event.preventDefault();
-  const userId = String(new FormData(event.currentTarget).get("userId") || "").trim();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
-    notify("请填写 Supabase Auth 用户列表中的完整 UUID。"); return;
-  }
-  try { state.quota = await cloud.setShellyUser(userId); await refreshQuota(); notify("Shelly UUID 授权已更新。"); }
-  catch { notify("授权失败：当前账号未获管理员授权，或该 UUID 不存在。"); }
-};
-$("clear-shelly-user").onclick = async () => {
-  try { state.quota = await cloud.setShellyUser(null); await refreshQuota(); notify("Shelly 每日无限额度已取消。"); }
-  catch { notify("取消授权失败：当前账号未获管理员授权。"); }
 };
 function showDetail(lead) {
   const record = recordFor(lead);

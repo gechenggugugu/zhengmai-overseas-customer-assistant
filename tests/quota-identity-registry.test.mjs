@@ -8,6 +8,7 @@ test("identity registry migration is identity-free, private and server gated", a
   const sql = await read("../backend/deployment/staging-quota/candidate-migrations/20261128190000_special_quota_authorization_registry.sql");
   assert.match(sql, /begin;[\s\S]*create table if not exists public\.search_quota_authorized_users/);
   assert.match(sql, /revoked_at timestamptz/);
+  assert.doesNotMatch(sql, /'shelly_user_id'\s*,/);
   assert.match(sql, /enable row level security/);
   assert.match(sql, /revoke all on public\.search_quota_authorized_users from public, anon, authenticated, service_role/);
   assert.match(sql, /insert into public\.search_quota_authorized_users\(user_id, authorized_at, authorized_by\)[\s\S]*special\.created_by/);

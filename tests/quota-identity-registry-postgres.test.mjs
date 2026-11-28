@@ -3,6 +3,7 @@ import {randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import {pathToFileURL} from "node:url";
 import test from "node:test";
+
 const engine = process.env.QUOTA_TEST_PGLITE_PATH;
 const migrations = new URL("../backend/supabase/migrations/", import.meta.url);
 const candidate = new URL("../backend/deployment/staging-quota/candidate-migrations/20261128190000_special_quota_authorization_registry.sql", import.meta.url);
@@ -23,7 +24,7 @@ test("candidate identity registry preserves approved synthetic binding and suppo
       create function auth.jwt() returns jsonb language sql stable as
         $$ select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
     `);
-    for (const name of ["20261126000100_lead_records.sql", "20261126000200_search_quota_limits.sql", "20261126000250_search_quota_access_hardening.sql", "20261126000300_search_quota_management.sql", "20261127000100_search_quota_policy_cache.sql", "20261127000200_search_quota_server_access.sql"]) {
+    for (const name of ["20261126000100_lead_records.sql", "20261126000200_search_quota_limits.sql", "20261126000250_search_quota_access_hardening.sql", "20261126000300_search_quota_management.sql"]) {
       await db.exec(await readFile(new URL(name, migrations), "utf8"));
     }
     const normal = randomUUID(), admin = randomUUID(), special = randomUUID(), approvedLater = randomUUID(), unlisted = randomUUID();
@@ -31,6 +32,9 @@ test("candidate identity registry preserves approved synthetic binding and suppo
       insert into auth.users(id,raw_app_meta_data) values
         ($1,'{}'),($2,'{"role":"admin"}'),($3,'{}'),($4,'{}'),($5,'{}')
     `, [normal, admin, special, approvedLater, unlisted]);
+    for (const name of ["20261127000100_search_quota_policy_cache.sql", "20261127000200_search_quota_server_access.sql"]) {
+      await db.exec(await readFile(new URL(name, migrations), "utf8"));
+    }
     await db.query(`insert into public.search_quota_special_users(slot,user_id,created_by,created_at)
                     values ('shelly',$1,$2,clock_timestamp())`, [special, admin]);
     await db.exec(await readFile(candidate, "utf8"));
@@ -64,6 +68,7 @@ test("candidate identity registry preserves approved synthetic binding and suppo
     const specialStatus = await status(approvedLater);
     assert.equal(specialStatus.daily_limit, null);
     assert.equal(specialStatus.monthly_limit, 1000);
+    assert.equal("shelly_user_id" in specialStatus, false);
 
     await db.exec("set role service_role");
     let reservation;

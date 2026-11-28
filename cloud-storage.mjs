@@ -23,10 +23,6 @@ export function createCloudStore(config, sdk = globalThis.supabase) {
       const result = unwrap(await client.functions.invoke("quota-admin", {body:{action:"set_monthly_limit", monthlyLimit}}));
       return result?.result;
     },
-    setShellyUser:async userId => {
-      const result = unwrap(await client.functions.invoke("quota-admin", {body:{action:"set_shelly_user", userId:userId || null}}));
-      return result?.result;
-    },
     onAuthStateChange:callback => client.auth.onAuthStateChange((_event, session) => callback(session)),
     signIn:async (email, password) => unwrap(await client.auth.signInWithPassword({email:String(email).trim().toLowerCase(), password})).session,
     signUp:async (email, password) => {

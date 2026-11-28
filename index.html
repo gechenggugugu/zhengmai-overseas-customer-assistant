@@ -8,6 +8,7 @@
 <meta name="description" content="正麦商用烘焙设备海外客户开发演示工作台">
 <title>正麦海外客户开发助手</title>
 <link rel="stylesheet" href="./style.css">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <script src="./public-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="module" src="./app.mjs"></script>
@@ -70,12 +71,7 @@
         <label>全项目每月共享额度<input name="monthlyLimit" type="number" min="1" max="1000" required></label>
         <div class="form-actions"><button class="primary" type="submit">保存月度额度</button></div>
       </form>
-      <form id="shelly-user-form" hidden>
-        <p>从 Supabase Auth 用户列表复制已批准账号的 UUID。服务端会再次核验该账号的授权资格。</p>
-        <label>Shelly 的 Supabase Auth UUID<input name="userId" type="text" inputmode="text" autocomplete="off" placeholder="从 Supabase Auth 用户列表复制 UUID"></label>
-        <small id="shelly-config-status">未配置时，不会向任何用户开放每日无限额度。</small>
-        <div class="form-actions"><button class="primary" type="submit">授权此 UUID</button><button id="clear-shelly-user" type="button">取消 Shelly 授权</button></div>
-      </form>
+      <p id="special-quota-status" class="muted" hidden></p>
     </section>
     <section class="panel results" id="results-panel" aria-busy="false">
       <div class="section-heading"><div><h2 id="view-title">搜索结果</h2><p id="count" aria-live="polite"></p></div><button id="export">导出 CSV</button></div>
