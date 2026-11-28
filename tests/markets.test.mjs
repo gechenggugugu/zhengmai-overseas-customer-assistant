@@ -25,7 +25,7 @@ test("country search uses one shared market config for searchable list and quick
 });
 
 test("search resolves ISO codes and legacy labels, sends Tavily English country names, and maps Brave ISO codes", () => {
-  assert.match(edge, /import marketData from "\.\.\/_shared\/markets\.json"/);
+  assert.match(edge, /import marketData from "\.\/_shared\/markets\.json"/);
   assert.match(edge, /const requestedMarket = contactSearch \? null : marketFor\(query\.market\)/);
   assert.match(edge, /\["uae", "阿联酋"\]/);
   assert.match(edge, /query\.market = requestedMarket\?\.code/);
@@ -45,4 +45,3 @@ test("country-specific query expands business terms while global search stays un
   assert.match(edge, /replace\(\/\^www\\\.\//);
   assert.match(edge, /const market = requestedMarket && aliases\.some/);
 });
-

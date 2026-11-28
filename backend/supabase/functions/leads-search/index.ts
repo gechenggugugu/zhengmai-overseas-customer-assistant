@@ -1,8 +1,10 @@
 import marketData from "./_shared/markets.json" with {type:"json"};
+import {classifySearchFailure, logSearchFailure} from "./diagnostics.mjs";
+import {executeReservedSearch} from "./quota-lifecycle.mjs";
 
 const corsHeaders = (origin: string | null, allowed: string[]) => ({
   "Access-Control-Allow-Origin": origin && allowed.includes(origin) ? origin : "null",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Vary": "Origin"
 });
@@ -12,6 +14,37 @@ function json(body: unknown, status: number, cors: Record<string, string>) {
     status,
     headers: {...cors, "Content-Type":"application/json; charset=utf-8", "Cache-Control":"no-store"}
   });
+}
+
+function logStage(requestId: string, stage: string, provider = "") {
+  console.log(JSON.stringify({event:"leads_search_stage", requestId, stage, ...(provider ? {provider} : {})}));
+}
+
+async function quotaRpc(config: {url: string, key: string},
+  name: "reserve_search_quota" | "confirm_search_quota" | "refund_search_quota",
+  args: {p_request_id: string, p_user_id: string, p_attempt_id: string},
+  attempts = 1): Promise<Record<string, unknown>> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await fetch(config.url + "/rest/v1/rpc/" + name, {
+        method:"POST", headers:{apikey:config.key, Authorization:"Bearer " + config.key, "Content-Type":"application/json"},
+        body:JSON.stringify(args), signal:AbortSignal.timeout(8_000), redirect:"error"
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result || typeof result !== "object") {
+        const error = Object.assign(new Error("quota_rpc_failed"), {code:"QUOTA_RPC_FAILED", status:response.status});
+        if (response.status < 500 || attempt + 1 >= attempts) throw error;
+        lastError = error;
+        continue;
+      }
+      return result as Record<string, unknown>;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 >= attempts) break;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("quota_rpc_failed");
 }
 
 async function readBodyWithinLimit(request: Request, limit: number): Promise<string | null> {
@@ -57,7 +90,62 @@ const marketFor = (value: unknown) => {
     (["uae", "阿联酋"].includes(name) ? markets.find(market => market.code === "AE") : null);
 };
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+async function cacheKey(provider: string, query: Record<string, unknown>): Promise<string> {
+  const bytes = new TextEncoder().encode(`${provider}:${stableJson(query)}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function serviceRestConfig() {
+  const url = Deno.env.get("SUPABASE_URL")?.replace(/\/$/, "");
+  // Runtime-injected server key only; never sent to the browser or included in logs.
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  return url && key ? {url, key} : null;
+}
+
+async function readCachedSearch(key: string): Promise<Record<string, unknown> | null> {
+  const config = serviceRestConfig();
+  if (!config) return null;
+  try {
+    const response = await fetch(`${config.url}/rest/v1/search_response_cache?cache_key=eq.${key}&select=response,provider_credits,expires_at`, {
+      headers:{apikey:config.key, Authorization:`Bearer ${config.key}`}, signal:AbortSignal.timeout(3_000)
+    });
+    if (!response.ok) return null;
+    const rows = await response.json();
+    const row = Array.isArray(rows) ? rows[0] : null;
+    if (!row || Date.parse(row.expires_at) <= Date.now() || !row.response || typeof row.response !== "object") return null;
+    return row;
+  } catch { return null; }
+}
+
+async function writeCachedSearch(key: string, provider: string, responseBody: Record<string, unknown>, credits: number | null) {
+  const config = serviceRestConfig();
+  if (!config) return;
+  try {
+    await fetch(`${config.url}/rest/v1/search_response_cache?on_conflict=cache_key`, {
+      method:"POST", headers:{apikey:config.key, Authorization:`Bearer ${config.key}`, "Content-Type":"application/json",
+        Prefer:"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify({cache_key:key, provider, response:responseBody, provider_credits:credits,
+        created_at:new Date().toISOString(), expires_at:new Date(Date.now()+6*60*60*1000).toISOString()}),
+      signal:AbortSignal.timeout(3_000)
+    });
+  } catch { /* cache is best effort; provider search remains authoritative */ }
+}
+
 Deno.serve(async request => {
+  let requestId: string = crypto.randomUUID();
+  let stage = "request";
+  let provider = "";
+  try {
   const origin = request.headers.get("Origin");
   const cors = corsHeaders(origin, allowedOrigins);
   if (origin && !allowedOrigins.includes(origin)) return json({error:"origin_not_allowed"}, 403, cors);
@@ -68,18 +156,31 @@ Deno.serve(async request => {
   const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   const projectUrl = Deno.env.get("SUPABASE_URL");
   const publicKey = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!bearer || !projectUrl || !publicKey) return json({error:"authentication_required"}, 401, cors);
+  if (!bearer || !projectUrl || !publicKey) return json({error:"authentication_required", code:"authentication_required"}, 401, cors);
 
-  // Verify the caller's session against Supabase Auth. No service-role key is used.
+  // Derive the quota owner from the verified Auth response, never the request body.
+  stage = "auth_verification";
   const identity = await fetch(projectUrl + "/auth/v1/user", {
     headers:{apikey:publicKey, Authorization:"Bearer " + bearer},
     signal:AbortSignal.timeout(8_000)
   }).catch(() => null);
   if (!identity?.ok) return json({error:"invalid_session"}, 401, cors);
+  const verifiedUser = await identity.json().catch(() => null);
+  const userId = verifiedUser?.id;
+  if (typeof userId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(userId)) {
+    return json({error:"invalid_session"}, 401, cors);
+  }
+  logStage(requestId, "auth_verified");
 
+  provider = Deno.env.get("SEARCH_PROVIDER") || "tavily";
   const providerUrl = Deno.env.get("SEARCH_API_URL") || "";
   const providerKey = Deno.env.get("SEARCH_API_KEY");
-  if (!providerKey) return json({error:"search_provider_not_configured"}, 503, cors);
+  stage = "configuration";
+  if (!providerKey) {
+    const error = Object.assign(new Error(), {code:"SEARCH_CONFIG_MISSING"});
+    const diagnostic = logSearchFailure({requestId, stage:"configuration", provider, error});
+    return json({error:diagnostic.code, code:diagnostic.code, message:diagnostic.message, requestId}, 503, cors);
+  }
   if (providerUrl) try {
     const parsedProviderUrl = new URL(providerUrl);
     if (parsedProviderUrl.protocol !== "https:" || parsedProviderUrl.username || parsedProviderUrl.password) {
@@ -89,6 +190,7 @@ Deno.serve(async request => {
 
   let query: Record<string, unknown>;
   try {
+    stage = "input_validation";
     const contentLength = Number(request.headers.get("Content-Length") || 0);
     if (contentLength > 12_000) return json({error:"request_too_large"}, 413, cors);
     const raw = await readBodyWithinLimit(request, 12_000);
@@ -97,6 +199,13 @@ Deno.serve(async request => {
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return json({error:"invalid_search_input"}, 400, cors);
     query = parsed as Record<string, unknown>;
   } catch { return json({error:"invalid_json"}, 400, cors); }
+  if (query.requestId !== undefined) {
+    if (typeof query.requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.requestId)) {
+      return json({error:"invalid_request_id"}, 400, cors);
+    }
+    requestId = query.requestId;
+  }
+  delete query.requestId;
   const contactSearch = query?.action === "contacts";
   if (contactSearch && (!query.company || typeof query.company !== "object" || Array.isArray(query.company))) return json({error:"company_required"}, 400, cors);
   if (!contactSearch && (!query || typeof query.product !== "string" || !query.product.trim())) {
@@ -123,72 +232,125 @@ Deno.serve(async request => {
   if (!contactSearch && query.market && !requestedMarket) return json({error:"invalid_market"}, 400, cors);
   if (!contactSearch) query.market = requestedMarket?.code || "";
 
-  const provider = Deno.env.get("SEARCH_PROVIDER") || "tavily";
   if (!["tavily", "brave"].includes(provider)) return json({error:"search_provider_not_configured"}, 503, cors);
 
-  const quota = await fetch(projectUrl + "/rest/v1/rpc/consume_search_daily_limit", {
-    method:"POST",
-    headers:{apikey:publicKey, Authorization:"Bearer " + bearer, "Content-Type":"application/json"},
-    body:"{}"
-  }).catch(() => null);
-  if (!quota?.ok) return json({error:"search_limit_unavailable"}, 503, cors);
-  const quotaResult = await quota.json().catch(() => null);
-  if (quotaResult === false) return json({error:"daily_search_limit_reached"}, 429, cors);
-  if (quotaResult !== true) return json({error:"search_limit_unavailable"}, 503, cors);
+  stage = "quota_reservation";
+  const quotaConfig = serviceRestConfig();
+  if (!quotaConfig) {
+    logStage(requestId, "quota_service_config_missing", provider);
+    return json({error:"search_limit_unavailable", code:"search_limit_unavailable", requestId}, 503, cors);
+  }
+  const quotaArgs = {p_request_id:requestId, p_user_id:userId, p_attempt_id:crypto.randomUUID()};
+  const lifecycle = await executeReservedSearch({
+    requestId,
+    signal:request.signal,
+    reserve:async () => quotaRpc(quotaConfig, "reserve_search_quota", quotaArgs),
+    confirm:async () => quotaRpc(quotaConfig, "confirm_search_quota", quotaArgs, 2),
+    refund:async () => quotaRpc(quotaConfig, "refund_search_quota", quotaArgs),
+    search:async () => {
+      stage = "provider_fetch_and_parse";
+      const providerSignal = AbortSignal.any([request.signal, AbortSignal.timeout(20_000)]);
+      const responseCacheKey = contactSearch ? "" : await cacheKey(provider, query);
+      if (responseCacheKey) {
+        const cached = await readCachedSearch(responseCacheKey);
+        if (cached) return {...cached.response as Record<string, unknown>, usage:{provider, apiCredits:0, cacheHit:true}};
+      }
+      const payload = await searchWithProvider(provider, providerUrl, providerKey, query, providerSignal);
+      logStage(requestId, "provider_response_parsed", provider);
+      if (contactSearch) {
+        if (!Array.isArray(payload?.contacts)) throw Object.assign(new Error(), {code:"PROVIDER_INVALID_RESPONSE"});
+        return {contacts:payload.contacts.slice(0, 30), searchedAt:new Date().toISOString(),
+          usage:{provider, apiCredits:payload.apiCredits ?? null, cacheHit:false}};
+      }
+      if (!Array.isArray(payload?.leads)) throw Object.assign(new Error(), {code:"PROVIDER_INVALID_RESPONSE"});
+      const leads = payload.leads.filter(lead => lead !== null).slice(0, 100).map(lead => ({
+        name:String(lead.name ?? "").trim().slice(0, 240),
+        market:String(lead.market ?? ""), marketStatus:String(lead.marketStatus ?? "待核实"),
+        type:String(lead.type ?? ""), typeStatus:String(lead.typeStatus ?? "待核实"),
+        business:String(lead.business ?? ""), website:safeUrl(lead.website),
+        websiteStatus:String(lead.websiteStatus ?? "搜索结果站点，尚未核实为公司官网"),
+        nameStatus:String(lead.nameStatus ?? "搜索结果标题，需确认公司主体"),
+        contact:String(lead.contact ?? "").slice(0, 320), contactStatus:String(lead.contactStatus ?? "未获取").slice(0, 120),
+        matchScore:Math.max(0, Math.min(100, Number(lead.matchScore) || 0)),
+        emailDraft:"", reason:String(lead.reason ?? "").slice(0, 500),
+        source:safeUrl(lead.source), date:String(lead.date ?? "")
+      })).filter((lead: Record<string, unknown>) => Boolean(lead.name && lead.source));
+      const enrichedLeads = await maybeAiEnrich(leads, query, request.signal);
+      if (request.signal.aborted) throw Object.assign(new Error(), {code:"REQUEST_CANCELLED"});
+      const responseBody = {leads:enrichedLeads};
+      if (responseCacheKey) await writeCachedSearch(responseCacheKey, provider, responseBody,
+        Number.isInteger(payload.apiCredits) ? payload.apiCredits as number : null);
+      return {...responseBody, usage:{provider, apiCredits:payload.apiCredits ?? null, cacheHit:false}};
+    }
+  });
 
-  try {
-    const payload = await searchWithProvider(provider, providerUrl, providerKey, query);
-    if (contactSearch) return Array.isArray(payload?.contacts)
-      ? json({contacts:payload.contacts.slice(0,30), searchedAt:new Date().toISOString()}, 200, cors)
-      : json({error:"invalid_provider_response"}, 502, cors);
-    if (!Array.isArray(payload?.leads)) return json({error:"invalid_provider_response"}, 502, cors);
-    let leads = payload.leads.slice(0, 100).map((lead: Record<string, unknown>) => ({
-      name:String(lead.name ?? "").trim().slice(0, 240),
-      market:String(lead.market ?? ""),
-      marketStatus:String(lead.marketStatus ?? "待核实"),
-      type:String(lead.type ?? ""),
-      typeStatus:String(lead.typeStatus ?? "待核实"),
-      business:String(lead.business ?? ""),
-      website:safeUrl(lead.website),
-      websiteStatus:String(lead.websiteStatus ?? "搜索结果站点，尚未核实为公司官网"),
-      nameStatus:String(lead.nameStatus ?? "搜索结果标题，需确认公司主体"),
-      contact:String(lead.contact ?? "").slice(0, 320),
-      contactStatus:String(lead.contactStatus ?? "未获取").slice(0, 120),
-      matchScore:Math.max(0, Math.min(100, Number(lead.matchScore) || 0)),
-      emailDraft:String(lead.emailDraft ?? "").slice(0, 5000),
-      reason:String(lead.reason ?? "").slice(0, 500),
-      source:safeUrl(lead.source),
-      date:String(lead.date ?? "")
-    })).filter((lead: Record<string, unknown>) => Boolean(lead.name && lead.source));
-    leads = await maybeAiEnrich(leads, query);
-    return json({leads}, 200, cors);
-  } catch {
-    return json({error:"search_provider_unavailable"}, 502, cors);
+  if (lifecycle.kind === "rejected") {
+    const quotaResult = lifecycle.quota;
+    if (quotaResult?.reason === "daily" || quotaResult?.reason === "monthly") {
+      return json({error:"search_quota_exceeded", code:"search_quota_exceeded", reason:quotaResult.reason, quota:quotaResult}, 429, cors);
+    }
+    if (quotaResult?.reason === "duplicate_request" || quotaResult?.reason === "request_closed") {
+      return json({error:"duplicate_search_request", code:"duplicate_search_request", requestId}, 409, cors);
+    }
+    return json({error:"search_limit_unavailable", code:"search_limit_unavailable", requestId}, 503, cors);
+  }
+  if (lifecycle.kind === "cancelled") {
+    logStage(requestId, "request_cancelled", provider);
+    return json({error:"search_request_cancelled", code:"search_request_cancelled", requestId,
+      quotaRefunded:lifecycle.refunded}, 499, cors);
+  }
+  if (lifecycle.kind === "failed") {
+    if (stage === "quota_reservation") {
+      logStage(requestId, lifecycle.refunded ? "quota_reservation_failed_released" : "quota_reservation_failed_pending", provider);
+      return json({error:"search_limit_unavailable", code:"search_limit_unavailable", requestId,
+        quotaRefunded:lifecycle.refunded}, 503, cors);
+    }
+    const diagnostic = logSearchFailure({requestId, stage, provider, error:lifecycle.error});
+    logStage(requestId, lifecycle.refunded ? "quota_refunded" : "quota_refund_pending", provider);
+    return json({error:diagnostic.code, code:diagnostic.code, message:diagnostic.message, requestId,
+      quotaRefunded:lifecycle.refunded}, 502, cors);
+  }
+  logStage(requestId, "quota_confirmed", provider);
+  return json(lifecycle.value, 200, cors);
+  } catch (error) {
+    const diagnostic = logSearchFailure({requestId, stage, provider, error});
+    const origin = request.headers.get("Origin");
+    return json({error:diagnostic.code, code:diagnostic.code, message:diagnostic.message, requestId}, 502,
+      corsHeaders(origin, allowedOrigins));
   }
 });
 
-async function maybeAiEnrich(leads: Record<string, unknown>[], query: Record<string, unknown>) {
+async function maybeAiEnrich(leads: Record<string, unknown>[], query: Record<string, unknown>, requestSignal?: AbortSignal) {
   const endpoint = Deno.env.get("AI_API_URL"), key = Deno.env.get("AI_API_KEY"), model = Deno.env.get("AI_MODEL");
   if (!endpoint || !key || !model || leads.length === 0) return leads;
   try {
-    if (new URL(endpoint).protocol !== "https:") return leads;
+    const url = new URL(endpoint);
+    if (url.protocol !== "https:" || url.username || url.password) return leads;
     const aiResults = leads.slice(0,20);
+    const sources = new Set(aiResults.map(lead => lead.source));
     const response = await fetch(endpoint, {method:"POST", headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"},
       body:JSON.stringify({model, temperature:0, max_tokens:5000, response_format:{type:"json_object"}, messages:[
         {role:"system",content:"Evaluate B2B fit for a commercial bakery equipment manufacturer. Use only supplied search evidence. Never infer or invent contact details, countries, product claims, or facts. Return JSON {items:[{source,score,reason,emailDraft}]}. Scores are advisory and require human review. Draft a short English first-contact email with placeholders where evidence is missing; do not claim prior contact or verified facts."},
-        {role:"user",content:JSON.stringify({criteria:{product:query.product,market:query.market,type:query.type},results:aiResults.map(({name,market,type,business,source,contact})=>({name,market,type,business:String(business||"").slice(0,900),source,contact}))})}
-      ]}),signal:AbortSignal.timeout(12_000)});
+        {role:"user",content:JSON.stringify({criteria:{product:query.product,market:query.market,type:query.type},results:aiResults.map(({name,market,type,business,source})=>({name,market,type,business:String(business||"").slice(0,900),source}))})}
+      ]}),redirect:"error",
+      signal:requestSignal ? AbortSignal.any([requestSignal, AbortSignal.timeout(12_000)]) : AbortSignal.timeout(12_000)});
     if (!response.ok) return leads;
     const result = await response.json();
     const parsed = JSON.parse(result.choices?.[0]?.message?.content || "{}");
-    const bySource = new Map((parsed.items || []).filter((item: Record<string, unknown>) => typeof item.source === "string")
-      .map((item: Record<string, unknown>) => [item.source, item]));
+    if (!Array.isArray(parsed?.items)) return leads;
+    const bySource = new Map<string, Record<string, unknown>>();
+    for (const item of parsed.items) {
+      if (typeof item?.source !== "string" || !sources.has(item.source) || bySource.has(item.source)) continue;
+      bySource.set(item.source, item);
+    }
     return leads.map(lead => {
-      const item = bySource.get(lead.source) as Record<string, unknown> | undefined;
+      const item = typeof lead.source === "string" ? bySource.get(lead.source) : undefined;
       if (!item) return lead;
-      return {...lead, matchScore:Math.max(0, Math.min(100, Number(item.score) || Number(lead.matchScore) || 0)),
-        reason:String(item.reason || lead.reason).slice(0,500),
-        emailDraft:typeof item.emailDraft === "string" ? item.emailDraft.slice(0,5000) : ""};
+      return {...lead,
+        matchScore:typeof item.score === "number" && Number.isFinite(item.score)
+          ? Math.max(0, Math.min(100, item.score)) : lead.matchScore,
+        reason:typeof item.reason === "string" && item.reason.trim() ? item.reason.trim().slice(0,500) : lead.reason,
+        emailDraft:typeof item.emailDraft === "string" ? item.emailDraft.trim().slice(0,5000) : lead.emailDraft};
     });
   } catch { return leads; }
 }
@@ -214,39 +376,66 @@ function companyTerms(query: Record<string, unknown>, language: string) {
   return terms[language] || `${product} ${type}`;
 }
 
-async function searchWithProvider(provider: string, endpoint: string, key: string, query: Record<string, unknown>) {
+async function searchWithProvider(provider: string, endpoint: string, key: string, query: Record<string, unknown>, signal?: AbortSignal) {
   // One authenticated request consumes one quota unit. Keep provider calls at one
   // basic search (one Tavily credit) so quota and external usage stay aligned.
   const languages = ["en"];
+  const selectedMarket = markets.find(item => item.code === String(query.market || ""));
+  const days = Number(query.days || 0);
+  const now = Date.now();
+  const endDate = new Date(now).toISOString().slice(0, 10);
+  const startDate = days ? new Date(now - days * 86_400_000).toISOString().slice(0, 10) : undefined;
   const searches = await Promise.all(languages.map(async language => {
     const text = companyTerms(query, language);
-    const selectedMarket = markets.find(item => item.code === String(query.market || ""));
     let response: Response;
     if (provider === "tavily") {
-      const days = Number(query.days || 0);
-      const endDate = new Date().toISOString().slice(0, 10);
-      const startDate = days ? new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10) : undefined;
       response = await fetch(endpoint || "https://api.tavily.com/search", {
         method:"POST", headers:{Authorization:`Bearer ${key}`, "Content-Type":"application/json"},
         body:JSON.stringify({query:text, search_depth:"basic", max_results:10, topic:"general", language,
           country:selectedMarket?.tavily ? selectedMarket.en.toLocaleLowerCase() : null, include_answer:false, include_usage:true,
-          ...(startDate ? {start_date:startDate, end_date:endDate, include_published_date:true} : {})}),
-        signal:AbortSignal.timeout(20_000)
+          ...(startDate ? {start_date:startDate, end_date:endDate, filter_by_published_date:true} : {})}),
+        redirect:"error", signal:signal || AbortSignal.timeout(20_000)
       });
     } else if (provider === "brave") {
       const url = new URL(endpoint || "https://api.search.brave.com/res/v1/web/search");
       url.searchParams.set("q", text); url.searchParams.set("count", "10");
       if (selectedMarket?.brave) url.searchParams.set("country", selectedMarket.code);
+      if (startDate) url.searchParams.set("freshness", `${startDate}to${endDate}`);
       url.searchParams.set("search_lang", language);
-      response = await fetch(url, {headers:{"X-Subscription-Token":key}, signal:AbortSignal.timeout(20_000)});
+      response = await fetch(url, {headers:{"X-Subscription-Token":key}, redirect:"error",
+        signal:signal || AbortSignal.timeout(20_000)});
     } else throw new Error("unsupported_provider");
-    if (!response.ok) throw new Error("provider_http_error");
-    const data = await response.json();
-    const items = provider === "tavily" ? (data.results || []) : (data.web?.results || []);
-    return items.map((item: Record<string, unknown>) => ({item, language}));
+    if (!response.ok) throw Object.assign(new Error(), {code:"PROVIDER_HTTP_ERROR", status:response.status});
+    let data: Record<string, unknown>;
+    try {
+      const parsed: unknown = await response.json();
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new SyntaxError("invalid_provider_object");
+      data = parsed as Record<string, unknown>;
+    }
+    catch (error) {
+      if (signal?.aborted) throw signal.reason;
+      throw Object.assign(new Error(), {code:"PROVIDER_INVALID_JSON", cause:error});
+    }
+    const braveWeb = data.web && typeof data.web === "object" && !Array.isArray(data.web)
+      ? data.web as Record<string, unknown> : null;
+    const items = provider === "tavily" ? data.results : braveWeb?.results;
+    if (!Array.isArray(items) || items.some((item: unknown) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return true;
+      const result = item as Record<string, unknown>;
+      return typeof result.url !== "string" || !safeUrl(result.url) ||
+        typeof result.title !== "string" || !result.title.trim();
+    })) {
+      throw Object.assign(new Error(), {code:"PROVIDER_INVALID_RESPONSE"});
+    }
+    const usage = data.usage && typeof data.usage === "object" ? data.usage as Record<string, unknown> : null;
+    const apiCredits = provider === "tavily" && usage && Number.isInteger(usage.credits) && Number(usage.credits) >= 0
+      ? Number(usage.credits) : null;
+    return {items:items.map((item: Record<string, unknown>) => ({item, language})), apiCredits};
   }));
   const seen = new Set<string>();
-  const flat = searches.flat();
+  const flat = searches.flatMap(search => search.items);
+  const apiCredits = provider === "tavily" && searches.every(search => search.apiCredits !== null)
+    ? searches.reduce((sum, search) => sum + (search.apiCredits || 0), 0) : null;
   if (query.action === "contacts") {
     const company = query.company as Record<string, unknown>;
     const companyName = String(company.name);
@@ -275,13 +464,17 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
     }).filter(Boolean);
     const uniqueContacts = [...new Map(contacts.map(contact => [(contact as Record<string, unknown>).name + "|" + (contact as Record<string, unknown>).position, contact])).values()];
     uniqueContacts.sort((a,b) => Number((b as Record<string,unknown>).target === "采购负责人") - Number((a as Record<string,unknown>).target === "采购负责人"));
-    return {contacts:uniqueContacts};
+    return {contacts:uniqueContacts, apiCredits};
   }
+  const seenCompanies = new Set<string>();
   const leads = flat.map(({item, language}) => {
     const url = safeUrl(item.url);
     const title = String(item.title || "").trim();
     const content = String(item.content || item.description || "").slice(0, 1600);
     if (!url || !title) return null;
+    const companyKey = title.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    if (companyKey && seenCompanies.has(companyKey)) return null;
+    if (companyKey) seenCompanies.add(companyKey);
     const websiteUrl = new URL(url);
     const hostname = websiteUrl.hostname.toLocaleLowerCase().replace(/^www\./, "");
     if (seen.has(hostname)) return null;
@@ -304,6 +497,5 @@ async function searchWithProvider(provider: string, endpoint: string, key: strin
       reason:`搜索摘要匹配评分 ${score}/100（规则初筛，需人工复核）`, matchScore:score, source:url,
       date:String(item.published_date || ""), language, sourceType:"live"};
   }).filter(Boolean);
-  return {leads};
+  return {leads, apiCredits};
 }
-

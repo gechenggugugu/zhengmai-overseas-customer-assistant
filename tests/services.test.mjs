@@ -109,3 +109,89 @@ test("guest data is copied only into the selected account and remains available 
   assert.equal(Object.keys(repository.guestRecords()).length,1);
   repository.useUser(null); repository.setCloudAdapter(null);
 });
+
+test("a pending pull from the old account cannot upload or populate the new account", async () => {
+  let finishPull;
+  const writes = [];
+  const lead = {name:"Old account fixture", website:"https://old-account.example"};
+  repository.useUser("switch-from");
+  repository.put(lead,{saved:true});
+  repository.setCloudAdapter({
+    list:owner => { assert.equal(owner,"switch-from"); return new Promise(resolve => { finishPull=resolve; }); },
+    put:(key,record,owner) => writes.push({key,record,owner})
+  });
+  try {
+    const pending = repository.syncCloud();
+    repository.useUser("switch-to");
+    finishPull([{record_key:leadKey(lead),record:{lead,saved:true,updatedAt:"2026-12-01T00:00:00Z"}}]);
+    assert.equal(await pending,false);
+    assert.deepEqual(repository.list(),{});
+    assert.deepEqual(writes,[]);
+  } finally { repository.useUser(null); repository.setCloudAdapter(null); }
+});
+
+test("serializing same-record edits keeps the newest edit after a delayed save", async () => {
+  let completeFirst, firstStarted;
+  const started = new Promise(resolve => { firstStarted=resolve; });
+  const writes = [];
+  const revisions = [];
+  const lead = {name:"Edit fixture", website:"https://edit-race.example"};
+  repository.useUser("edit-race");
+  repository.setCloudAdapter({
+    put:async (_key,record,owner) => {
+      assert.equal(owner,"edit-race");
+      writes.push(record.note);
+      revisions.push(record.syncRevision);
+      if (writes.length === 1) {
+        await new Promise(resolve => { completeFirst=resolve; firstStarted(); });
+        return {updated_at:"2099-01-01T00:00:00Z"};
+      }
+      return {updated_at:record.updatedAt};
+    }
+  });
+  try {
+    repository.put(lead,{note:"first edit"});
+    const first = repository.syncRecord(lead);
+    await started;
+    repository.put(lead,{note:"newest edit"});
+    const second = repository.syncRecord(lead);
+    assert.deepEqual(writes,["first edit"]);
+    completeFirst();
+    assert.deepEqual(await Promise.all([first,second]),[true,true]);
+    const saved = repository.list()[leadKey(lead)];
+    assert.equal(saved.note,"newest edit");
+    assert.notEqual(saved.updatedAt,"2099-01-01T00:00:00Z");
+    assert.deepEqual(writes,["first edit","newest edit"]);
+    assert.equal(revisions[1],"2099-01-01T00:00:00Z");
+  } finally { repository.useUser(null); repository.setCloudAdapter(null); }
+});
+
+test("an offline edit conflict keeps the current cloud record and a local recovery copy", async () => {
+  const lead = {name:"Conflict fixture", website:"https://conflict.example"};
+  const key = leadKey(lead);
+  const previous = "2026-11-28T01:00:00Z";
+  const current = "2026-11-28T23:00:00Z";
+  let cloudRecord = {lead,note:"original",history:[],status:"待联系",updatedAt:previous,syncRevision:previous};
+  let attempts = 0;
+  repository.useUser("conflict-test");
+  repository.setCloudAdapter({
+    async list(){return [{record_key:key,record:cloudRecord}]},
+    async put(_key, record){
+      attempts++;
+      assert.equal(record.syncRevision,previous);
+      return {conflictRecord:cloudRecord};
+    }
+  });
+  try {
+    await repository.syncCloud();
+    repository.put(lead,{note:"offline follow-up",status:"已联系"});
+    cloudRecord = {...cloudRecord,note:"newer cloud follow-up",updatedAt:current,syncRevision:current};
+    await assert.rejects(repository.syncCloud(),{code:"CLOUD_EDIT_CONFLICT"});
+    assert.equal(repository.list()[key].note,"newer cloud follow-up");
+    assert.equal(repository.list()[key].localConflict.note,"offline follow-up");
+    assert.equal(repository.list()[key].localConflict.status,"已联系");
+    await repository.syncCloud();
+    assert.equal(repository.list()[key].localConflict.note,"offline follow-up");
+    assert.equal(attempts,1);
+  } finally { repository.useUser(null); repository.setCloudAdapter(null); }
+});

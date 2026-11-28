@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add('http://127.0.0.1:4173/')

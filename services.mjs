@@ -28,8 +28,68 @@ export function safeUrl(value) {
   } catch { return ""; }
 }
 const normalized = value => String(value ?? "").trim().toLowerCase();
+const newRequestId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (!globalThis.crypto?.getRandomValues) throw new Error("当前浏览器无法安全生成搜索编号，请更新浏览器后重试。");
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+};
 let cloudAdapter = null;
 let storageNamespace = "";
+let cloudUserId = null;
+let syncGeneration = 0;
+const pendingWrites = new Map();
+
+function captureSyncScope() {
+  const generation = syncGeneration;
+  return {adapter:cloudAdapter, userId:cloudUserId, key:config.storageKey + storageNamespace,
+    current:() => generation === syncGeneration};
+}
+
+function readRecords(key) {
+  return JSON.parse(localStorage.getItem(key) || "{}");
+}
+
+function writeCloudRecord(scope, key, remoteRecord) {
+  const queueKey = JSON.stringify([scope.key, key]);
+  const previous = pendingWrites.get(queueKey) ?? Promise.resolve();
+  const write = previous.catch(() => {}).then(async () => {
+    if (!scope.current()) return false;
+    const record = readRecords(scope.key)[key];
+    if (!record) return false;
+    if (remoteRecord && !record.pendingSync && Date.parse(record.updatedAt || 0) <= Date.parse(remoteRecord.updatedAt || 0)) return true;
+    const saved = await scope.adapter.put(key, record, scope.userId);
+    if (!scope.current()) return false;
+    if (saved?.conflictRecord || saved?.updated_at) {
+      const records = readRecords(scope.key);
+      const current = records[key];
+      const unchanged = JSON.stringify(current) === JSON.stringify(record);
+      if (saved.conflictRecord) {
+        if (current) {
+          const {localConflict,pendingSync,syncRevision,...localEdit} = current;
+          records[key] = {...saved.conflictRecord, localConflict:localEdit};
+          localStorage.setItem(scope.key, JSON.stringify(records));
+        }
+        throw Object.assign(new Error("另一台电脑已更新此线索，请核对保留的本机备注。"), {code:"CLOUD_EDIT_CONFLICT"});
+      }
+      if (unchanged) {
+        records[key] = {...record, updatedAt:saved.updated_at, syncRevision:saved.updated_at, pendingSync:false};
+      } else if (current && current.syncRevision === record.syncRevision) {
+        // The next queued edit was based on this device's just-saved record.
+        records[key] = {...current, syncRevision:saved.updated_at};
+      }
+      localStorage.setItem(scope.key, JSON.stringify(records));
+    }
+    return true;
+  });
+  pendingWrites.set(queueKey, write);
+  return write.finally(() => {
+    if (pendingWrites.get(queueKey) === write) pendingWrites.delete(queueKey);
+  });
+}
 export function leadKey(lead) {
   const site = safeUrl(lead.website);
   const domain = site && new URL(site).hostname.replace(/^www\./, "");
@@ -44,28 +104,67 @@ export function uniqueLeads(leads) {
     return true;
   });
 }
+const providerFailureMessages = {
+  search_provider_not_configured:"搜索服务尚未完成配置，请联系管理员。",
+  search_provider_http_error:"搜索供应商暂时拒绝了请求，请稍后重试。",
+  search_provider_invalid_json:"搜索供应商返回了无法读取的数据，请稍后重试。",
+  search_provider_invalid_response:"搜索供应商返回的数据格式无效，请稍后重试。",
+  search_provider_timeout:"搜索供应商响应超时，请稍后重试。"
+};
+
+function searchError(message, requestId, failure) {
+  const serverId = failure?.requestId;
+  const trace = typeof serverId === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(serverId)
+    ? serverId : requestId;
+  const settlement = failure?.quotaRefunded === true ? " 本次额度已退回。" :
+    failure?.quotaRefunded === false ? " 额度结算尚未确认，请稍后刷新额度。" : "";
+  return new Error(`${message}${settlement}（请求编号：${trace}）`);
+}
+
+async function postLiveSearch(body, signal, action) {
+  const headers = {"Content-Type":"application/json"};
+  if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
+  const token = await cloudAdapter?.accessToken?.();
+  if (token) headers.Authorization = "Bearer " + token;
+  const requestId = newRequestId();
+  let response;
+  try {
+    response = await fetch(config.searchEndpoint, {
+      method:"POST", headers, body:JSON.stringify({...body,requestId}), signal
+    });
+  } catch (error) {
+    if (signal?.aborted || error?.name === "AbortError") throw error;
+    throw searchError("搜索请求未收到响应。请检查网络并刷新额度后重试。",requestId);
+  }
+  if (response.ok) {
+    try { return await response.json(); }
+    catch (error) {
+      if (signal?.aborted || error?.name === "AbortError") throw error;
+      throw searchError("无法读取搜索结果，请刷新额度后重试。",requestId);
+    }
+  }
+  const failure = await response.json().catch(() => null);
+  const code = failure?.code || failure?.error;
+  const reason = failure?.reason || failure?.quota?.reason;
+  let message;
+  if (response.status === 401) message = `登录验证错误：请先登录并验证邮箱后再${action}。`;
+  else if (response.status === 404) message = "真实搜索端点尚不可用，请联系管理员检查部署。";
+  else if (response.status === 429) {
+    message = reason === "monthly" ? "配额不足：本月共享额度已用完。" :
+      reason === "daily" ? "配额不足：今日个人额度已用完。" : "请求暂时受限，请检查额度后稍后重试。";
+  } else if (response.status === 409) message = `相同${action}请求已处理或正在进行，请重新发起。`;
+  else if (typeof code === "string" && Object.hasOwn(providerFailureMessages,code)) message = providerFailureMessages[code];
+  else if (response.status >= 500) message = "搜索服务暂不可用，请刷新额度后稍后重试。";
+  else message = `搜索请求未通过校验（HTTP ${response.status}）。`;
+  throw searchError(message,requestId,failure);
+}
+
 export async function searchLeads(query, signal) {
   if (query.mode === "live") {
-    if (!config.searchEndpoint) throw new Error("真实搜索尚未配置。请选择演示样本，或查看接入说明。");
-    const headers = {"Content-Type":"application/json"};
-    if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
-    const token = await cloudAdapter?.accessToken?.();
-    if (token) headers.Authorization = "Bearer " + token;
-    const response = await fetch(config.searchEndpoint, {
-      method: "POST", headers,
-      body: JSON.stringify({...query, limit: config.maxResults}), signal
-    });
-    if (!response.ok) {
-      const message = response.status === 401 ? "请先登录并验证邮箱后再搜索。" :
-        response.status === 429 ? "搜索配额已用完，请在下个配额周期后重试。" :
-        response.status === 503 ? "真实搜索服务尚未配置或暂不可用，请检查服务端设置。" :
-        response.status >= 500 ? "搜索服务暂时不可用。请稍后手动重试；系统不会自动重复请求或产生额外用量。" :
-        "搜索请求未通过校验（" + response.status + "）。";
-      throw new Error(message);
-    }
-    const payload = await response.json();
-    if (!Array.isArray(payload.leads)) throw new Error("真实搜索返回格式不符合接口约定。");
-    return payload.leads.slice(0, config.maxResults).map(lead => ({
+    if (!config.searchEndpoint) throw new Error("真实搜索尚未配置。请选择演示样本，或查看使用说明。");
+    const payload = await postLiveSearch({...query,limit:config.maxResults},signal,"搜索");
+    if (!Array.isArray(payload?.leads)) throw new Error("真实搜索返回格式不符合接口约定。");
+    const leads = payload.leads.slice(0, config.maxResults).map(lead => ({
       name: String(lead.name ?? "").trim(), market: String(lead.market ?? ""),
       marketStatus: String(lead.marketStatus ?? "待核实"), type: String(lead.type ?? ""),
       typeStatus: String(lead.typeStatus ?? "待核实"), nameStatus: String(lead.nameStatus ?? "需确认公司主体"),
@@ -77,6 +176,8 @@ export async function searchLeads(query, signal) {
       reason: String(lead.reason ?? ""), source: safeUrl(lead.source),
       date: String(lead.date ?? ""), emailFocus: "", sourceType: "live"
     })).filter(lead => lead.name && lead.source);
+    Object.defineProperty(leads, "providerUsage", {value:payload.usage || null, enumerable:false});
+    return leads;
   }
   const product = aliases[normalized(query.product)] || query.product;
   const market = aliases[normalized(query.market)] || query.market;
@@ -102,28 +203,26 @@ export async function searchLeads(query, signal) {
 export async function searchCompanyContacts(lead, signal) {
   if (lead.sourceType !== "live") throw new Error("演示样本不支持真实联系人挖掘。");
   if (!config.searchEndpoint) throw new Error("真实搜索尚未配置。");
-  const headers = {"Content-Type":"application/json"};
-  if (config.supabaseAnonKey) headers.apikey = config.supabaseAnonKey;
-  const token = await cloudAdapter?.accessToken?.();
-  if (token) headers.Authorization = "Bearer " + token;
-  const response = await fetch(config.searchEndpoint, {method:"POST", headers,
-    body:JSON.stringify({action:"contacts", company:{name:lead.name, website:lead.website, market:lead.market}}), signal});
-  if (!response.ok) {
-    const message = response.status === 401 ? "请先登录并验证邮箱后再挖掘联系人。" :
-      response.status === 429 ? "搜索配额已用完，请在下个配额周期后重试。" :
-      response.status === 503 ? "真实搜索服务尚未配置或暂不可用。" : "联系人搜索暂不可用（" + response.status + "）。";
-    throw new Error(message);
-  }
-  const payload = await response.json();
-  if (!Array.isArray(payload.contacts)) throw new Error("联系人搜索返回格式不符合接口约定。");
+  const payload = await postLiveSearch({
+    action:"contacts", company:{name:lead.name,website:lead.website,market:lead.market}
+  },signal,"搜索联系人");
+  if (!Array.isArray(payload?.contacts)) throw new Error("联系人搜索返回格式不符合接口约定。");
   return payload;
 }
 // Local browser repository. Replace this adapter with authenticated API calls
 // when account-scoped persistence is introduced.
 export const repository = {
-  list() { return JSON.parse(localStorage.getItem(config.storageKey + storageNamespace) || "{}"); },
-  setCloudAdapter(adapter) { cloudAdapter = adapter; },
-  useUser(userId) { storageNamespace = userId ? ".user." + userId : ""; },
+  list() { return readRecords(config.storageKey + storageNamespace); },
+  setCloudAdapter(adapter) {
+    if (cloudAdapter !== adapter) syncGeneration++;
+    cloudAdapter = adapter;
+  },
+  useUser(userId) {
+    const nextUserId = userId || null;
+    if (cloudUserId !== nextUserId) syncGeneration++;
+    cloudUserId = nextUserId;
+    storageNamespace = nextUserId ? ".user." + nextUserId : "";
+  },
   isCloudUser() { return Boolean(storageNamespace); },
   guestRecords() { try { return JSON.parse(localStorage.getItem(config.storageKey) || "{}"); } catch { return {}; } },
   async importGuestRecords() {
@@ -135,49 +234,38 @@ export const repository = {
       else if (Date.parse(record.updatedAt || 0) > Date.parse(current[key].updatedAt || 0)) current[key] = record;
     }
     localStorage.setItem(config.storageKey + storageNamespace, JSON.stringify(current));
-    await this.syncCloud();
-    return Object.keys(guest).length;
+    return await this.syncCloud() ? Object.keys(guest).length : null;
   },
   async syncRecord(lead) {
     if (!cloudAdapter || !storageNamespace) return false;
-    const key = leadKey(lead);
-    const record = this.list()[key];
-    if (!record) return false;
-    const saved = await cloudAdapter.put(key, record);
-    if (saved?.updated_at) {
-      const records = this.list();
-      records[key] = {...records[key], updatedAt:saved.updated_at};
-      localStorage.setItem(config.storageKey + storageNamespace, JSON.stringify(records));
-    }
-    return true;
+    return writeCloudRecord(captureSyncScope(), leadKey(lead));
   },
   async syncCloud() {
     if (!cloudAdapter || !storageNamespace) return false;
-    const key = config.storageKey + storageNamespace;
-    const local = this.list();
-    const remote = await cloudAdapter.list();
+    const scope = captureSyncScope();
+    const remote = await scope.adapter.list(scope.userId);
+    if (!scope.current()) return false;
+    const local = readRecords(scope.key);
+    const remoteByKey = new Map();
     for (const row of remote) {
+      remoteByKey.set(row.record_key, row.record);
       const current = local[row.record_key];
-      if (!current || Date.parse(row.record.updatedAt || 0) >= Date.parse(current.updatedAt || 0)) {
-        local[row.record_key] = row.record;
+      if (!current || (!current.pendingSync && Date.parse(row.record.updatedAt || 0) >= Date.parse(current.updatedAt || 0))) {
+        local[row.record_key] = current?.localConflict ? {...row.record, localConflict:current.localConflict} : row.record;
       }
     }
-    localStorage.setItem(key, JSON.stringify(local));
-    for (const [recordKey, record] of Object.entries(local)) {
-      const remoteRecord = remote.find(row => row.record_key === recordKey)?.record;
-      if (!remoteRecord || Date.parse(record.updatedAt || 0) > Date.parse(remoteRecord.updatedAt || 0)) {
-        const saved = await cloudAdapter.put(recordKey, record);
-        if (saved?.updated_at) local[recordKey] = {...local[recordKey], updatedAt:saved.updated_at};
-      }
+    localStorage.setItem(scope.key, JSON.stringify(local));
+    for (const recordKey of Object.keys(local)) {
+      if (!await writeCloudRecord(scope, recordKey, remoteByKey.get(recordKey))) return false;
     }
-    localStorage.setItem(key, JSON.stringify(local));
-    return true;
+    return scope.current();
   },
   put(lead, changes) {
     const records = this.list();
     const key = leadKey(lead);
     const current = records[key] || {saved:false, status:statuses[0], note:"", history:[]};
-    const next = {...current, ...changes, lead, updatedAt:new Date().toISOString()};
+    const next = {...current, ...changes, lead, updatedAt:new Date().toISOString(), pendingSync:this.isCloudUser()};
+    if ("note" in changes || "status" in changes) delete next.localConflict;
     if (current.status !== next.status || current.note !== next.note) {
       next.history = [{status:next.status, note:next.note, at:new Date().toISOString()}, ...current.history];
     }
@@ -207,4 +295,3 @@ export function csvEncode(rows) {
     return '"' + neutral.replaceAll('"', '""') + '"';
   }).join(",")).join("\r\n");
 }
-

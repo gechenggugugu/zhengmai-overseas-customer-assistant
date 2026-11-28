@@ -1,0 +1,11 @@
+{
+  "index.html": "text/html; charset=utf-8",
+  "implementation.html": "text/html; charset=utf-8",
+  "style.css": "text/css; charset=utf-8",
+  "favicon.svg": "image/svg+xml",
+  "public-config.js": "text/javascript; charset=utf-8",
+  "app.mjs": "text/javascript; charset=utf-8",
+  "services.mjs": "text/javascript; charset=utf-8",
+  "cloud-storage.mjs": "text/javascript; charset=utf-8",
+  "backend/supabase/functions/_shared/markets.json": "application/json; charset=utf-8"
+}

@@ -1,13 +1,42 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>部署与接入说明 · 正麦海外客户开发助手</title><link rel="stylesheet" href="./style.css"></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>使用说明 · 正麦海外客户开发助手</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
 <body class="docs"><main>
-<a href="./index.html">返回工作台</a>
-<h1>部署与接入说明</h1>
-<section class="panel"><h2>数据来源</h2><p>演示模式里的公司、联系方式和 <code>.example</code> 链接都是虚构样本，仅用于体验功能，不能当作真实客户。真实搜索只调用配置的服务端接口；后端未配置或用户未登录时会报错，不会回退到演示样本。真实结果保留公开来源链接，使用前应核验。</p><p>页面现有搜索、筛选、去重、收藏、跟进历史、CSV 导出和英文邮件草稿在 Windows 本地版和线上版共用同一套业务代码。</p></section>
-<section class="panel"><h2>Windows 本地运行</h2><p>解压启动包后双击 <code>start-windows.bat</code>。它使用 Windows 自带 PowerShell 在本机启动网页并打开浏览器；不需要安装 Node.js、npm 或数据库。关闭启动窗口即可停止服务。免安装包和在线部署加载同样的页面、服务逻辑和配置文件。</p><p>启用跨设备同步时，本机也须通过 <code>http://127.0.0.1:4173</code> 启动，以便 ES 模块与登录回调正常工作；<code>file://</code> 直接打开不支持此版本。</p></section>
-<section class="panel"><h2>GitHub Pages 在线发布</h2><p>正式网址：<a href="https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/" target="_blank" rel="noopener">https://gechenggugugu.github.io/zhengmai-overseas-customer-assistant/</a>。源码仓库：<a href="https://github.com/gechenggugugu/zhengmai-overseas-customer-assistant" target="_blank" rel="noopener">GitHub 项目</a>。本项目由 <code>main</code> 分支根目录发布。更新源码后，在仓库 <b>Settings → Pages</b> 检查分支为 <code>main</code>、目录为 <code>/(root)</code>。静态演示无需环境变量或 API 密钥。GitHub 官方的<a href="https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site" target="_blank" rel="noopener">分支发布说明</a>介绍了配置方法。该仓库为公开仓库，源码对所有人可见。</p></section>
-<section class="panel"><h2>邮箱登录和跨设备同步</h2><p>云端功能基于 Supabase Auth 与 Postgres。先创建 Supabase 项目，执行 <code>backend/supabase/migrations/20261126000100_lead_records.sql</code>，部署 Edge Function，并在 <code>public-config.js</code> 填项目 URL 和 publishable/anon key。该 key 会出现在浏览器中，只有配合启用的行级安全（RLS）才可公开使用；SQL 已按登录用户限制每行的读写权限。浏览器不会拿到 Supabase secret/service-role key。</p><p>配置 Auth 邮箱验证邮件和允许回跳地址：GitHub Pages 项目主页、本机 <code>http://127.0.0.1:4173</code>。配置完成后，不同电脑登录同一账号后，收藏、跟进状态、备注和历史会同步。访客数据保存在原浏览器，登录后可主动点导入按钮；不会静默并入账号。SDK 使用 PKCE 和 sessionStorage，会话在标签页关闭后通常结束；同源 XSS 仍有机会读取会话，CSP 与动态文本转义用于降低风险。</p><p>Supabase 免费层标价为 $0，但长期不活跃的免费项目会被暂停。无需付费升级；本次没有创建 Supabase 项目、启用付费服务或提交付款信息。请查看 <a href="https://supabase.com/pricing" target="_blank" rel="noopener">当前价格与免费层限制</a>。</p></section>
-<section class="panel"><h2>国家选择和真实搜索</h2><p>国家/地区单选列表由 <code>backend/supabase/functions/_shared/markets.json</code> 统一维护，包含 ISO 3166-1 两位代码以及中文、英文名称。页面支持按中英文名称或代码搜索、249 个国家/地区列表、常用市场快捷选择和“全部市场（全球搜索）”。真实搜索把 ISO 代码发给后端；Tavily 需要英文国家名称而非代码，只对其 API 支持的地区发送国家参数，其他地区仍把国家名称加入搜索词。未选择国家时不设置国家筛选。每次用户操作仍只发一个 Tavily basic 查询，产品、国家和进口商/经销商/批发商扩展词组合在同一查询中；结果按规范化站点主机名去重。Brave 仅对配置为支持的既有 11 个国家发送 ISO 代码，其他地区通过关键词定位。</p><p>真实搜索保留搜索标题、站点、摘要、来源 URL 和摘要中实际出现的邮箱。公司主体、官网、国家和客户类型分别标记待核实状态；未在摘要出现的联系方式保持空白。规则初筛标明评分依据；配置可选 AI 服务后，会以搜索证据评分并生成英文草稿，草稿不会自动发送。</p><p>Edge Function 验证 Supabase 登录会话。服务端强制每用户每天 5 次、整个项目每月 150 次；每次 Tavily basic 搜索通常消耗 1 credit。达到上限立即停止，不自动追加付费额度。在 Supabase Edge Function Secrets 设置 <code>SEARCH_PROVIDER=tavily</code>、<code>SEARCH_API_KEY</code> 和 <code>APP_ORIGINS</code>，搜索供应商 key 仅存服务端。可选 AI API 必须三项服务端变量齐备才会调用；模型服务可能收费。不要把搜索密钥、Supabase secret/service-role key 写进源码。部署步骤见 <a href="./backend/README.md">后端部署说明</a>。</p></section>
-<section class="panel"><h2>企业关键联系人挖掘</h2><p>在真实企业详情中按需点击“按需挖掘”。单次点击通过同一登录保护的 Edge Function 发起一条搜索，优先查询 Purchasing Manager、Procurement Manager、Import Manager、Sourcing Manager，同时查询 Owner、Founder、Managing Director、CEO。每次点击计入既有每日 5 次/每月 150 次搜索额度；不额外并发调用搜索供应商。</p><p>候选人只在搜索证据同时出现公司名、支持的目标职位和可识别的人名时展示。公开社交主页仅在结果来源本身是 LinkedIn 或 Facebook 时显示；公开商务邮箱只取自搜索摘要。不会抓取登录后或私有资料、绕过平台限制或猜测个人联系方式。搜索证据及候选人保存在关联企业记录中；联系人状态明确标为“待核实”。当前结果需要人工打开证据来源核实，系统不会把搜索匹配自动升级为“已核实”；未找到时显示“未找到”，已有数据不被覆盖。</p></section></main></body></html>
-
+  <a href="./index.html">返回工作台</a>
+  <h1>使用说明</h1>
+  <section class="panel">
+    <h2>真实服务与演示样本</h2>
+    <p>「演示样本」只用于体验页面操作，里面的公司、联系方式和网站地址均为虚构内容，不代表真实海外客户。真实搜索必须选择「真实搜索」，并在已启用的 Staging 服务中登录；搜索失败时系统会显示错误，不会用演示样本冒充真实结果。</p>
+    <p>如果登录入口不可用、真实搜索提示未配置或连接失败，请先联系项目管理员确认 Staging 数据库、搜索函数和服务配置已完成验收。不要把本机保存或演示页面视为云端同步、真实搜索已经可用。</p>
+  </section>
+  <section class="panel">
+    <h2>登录和跨电脑使用</h2>
+    <p>在已启用云端功能的工作台，使用邮箱注册并按提示验证邮箱。两台电脑使用同一个网页地址和同一个账号登录，即可同步收藏、跟进状态、备注和历史。</p>
+    <p>访客记录保存在当前浏览器。登录后可选择「导入本机记录」，把访客记录合并到当前账号。</p>
+  </section>
+  <section class="panel">
+    <h2>搜索和核实线索</h2>
+    <p>填写产品，按需选择国家和客户类型，再补充关键词。登录后将数据来源切换为「真实搜索」。演示模式中的公司和链接均为虚构样本。</p>
+    <p>打开公司详情，查看匹配理由和来源。官网、公司主体、国家或联系方式标为待核实时，应打开来源确认。公司详情也可按需搜索公开商务联系人候选。</p>
+  </section>
+  <section class="panel">
+    <h2>收藏、跟进和导出</h2>
+    <p>点击「收藏」把企业加入「我的收藏」。在详情中填写跟进状态和备注，点击「保存跟进」后可在「跟进记录」查看。按关键词或状态筛选后，点击「导出 CSV」下载当前列表。</p>
+    <p>如果另一台电脑已更新同一条线索，详情会显示云端最新内容和保留在本机的跟进备注。核对后可把需要保留的内容填回并保存。</p>
+    <p>详情中的「生成首次开发邮件」会生成英文草稿。发送前请核对公司名称、联系人和产品信息，再自行发送。</p>
+  </section>
+  <section class="panel">
+    <h2>搜索额度</h2>
+    <p>登录后可查看个人每日额度和项目共享月度额度，重置时间以 UTC 为准。搜索中会暂时占用一次额度，成功后确认，失败或取消后退还。管理员可在权限范围内调整项目月度上限。</p>
+  </section>
+  <section class="panel">
+    <h2>Windows 本机版</h2>
+    <p>解压后双击 <code>start-windows.bat</code>，在 <code>http://127.0.0.1:4173/</code> 打开工作台。关闭启动窗口即可停止。另一台电脑应使用已发布的网址，或在那台电脑单独启动本机版。</p>
+  </section>
+</main></body>
+</html>
